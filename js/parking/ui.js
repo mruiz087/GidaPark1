@@ -1,4 +1,4 @@
-// State for weekly view
+// State for weekly view 
 let currentWeekOffset = 0;
 window.currentGroupId = window.currentGroupId || null;
 
