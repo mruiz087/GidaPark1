@@ -1,4 +1,4 @@
-// Unified translation system with prefixes for flexible and fixed carpooling
+// Unified translation system with prefixes for flexible, fixed, and parking modules
 const translations = {
     es: {
         // ===== SHARED =====
@@ -9,7 +9,7 @@ const translations = {
         'shared.unirse_codigo': 'Unirse con Código',
         'shared.idioma': 'Idioma',
         'shared.cerrar_sesion': 'Cerrar Sesión',
-        'shared.nombre_usuario': 'Nombre de usuario',
+        'shared.nombre_usuario': 'Tu Nombre Público',
         'shared.volver': 'Volver',
         'shared.cerrar': 'Cerrar',
         'shared.cancelar': 'Cancelar',
@@ -17,25 +17,28 @@ const translations = {
         'shared.crear': 'Crear',
         'shared.salir': 'Salir',
         'shared.mis_grupos': 'Mis Grupos',
-        'shared.nuevo_grupo': '¿Nuevo grupo?',
+        'shared.nuevo_grupo': 'Nuevo Grupo',
         'shared.tienes_codigo': '¿Tienes un código?',
         'shared.nombre_grupo': 'Nombre del grupo',
-        'shared.codigo': 'XXXXXX',
+        'shared.codigo': 'CÓDIGO',
         'shared.no_grupos': 'No tienes grupos todavía',
         'shared.salir_grupo': 'Salir de un grupo',
         'shared.miembros': 'Miembros',
         'shared.ver_miembros': 'Ver Miembros',
         'shared.no_miembros': 'No hay miembros',
-        'shared.refrescar': '🔄 Refrescar',
+        'shared.refrescar': 'Refrescar',
         'shared.toast_invalid_code': 'Código no válido',
         'shared.toast_already_in_group': 'Ya perteneces a este grupo',
         'shared.confirm_leave_group': '¿Estás seguro de que quieres salir del grupo',
         'shared.toast_left_group': 'Has salido de',
         'shared.toast_name_saved': 'Nombre guardado',
+        'shared.toast_group_created': 'Grupo creado correctamente',
+        'shared.toast_group_joined': 'Te has unido al grupo',
         'shared.forgot_password': '¿Olvidaste tu contraseña?',
         'shared.forgot_password_title': 'Recuperar Contraseña',
         'shared.forgot_password_desc': 'Te enviaremos un enlace a tu email para restablecer tu contraseña.',
         'shared.email_placeholder': 'Email',
+        'shared.password_placeholder': 'Contraseña',
         'shared.send_reset_email': 'Enviar enlace',
         'shared.reset_email_sent': '¡Email enviado! Revisa tu bandeja de entrada.',
         'shared.reset_email_error': 'No se encontró ninguna cuenta con ese email.',
@@ -56,6 +59,29 @@ const translations = {
         'shared.register_check_email': 'Revisa tu email para confirmar la cuenta.',
         'shared.create_group_error': 'No se pudo crear el grupo',
         'shared.join_group_error': 'No se pudo unir al grupo',
+        'shared.hoy_resumen': 'Resumen de Hoy',
+        'shared.sin_actividad_hoy': 'Sin eventos programados para hoy en tus grupos.',
+        'shared.crear_o_unirse': 'Crear o Unirse',
+        'shared.copiar_codigo': 'Copiar código',
+        'shared.codigo_copiado': 'Código copiado al portapapeles',
+        'shared.compartir': 'Compartir',
+        'shared.share_text': 'Únete a mi grupo "{name}" en GidaPark con el código: {code}',
+        'shared.estado_relevo_pendiente': 'Relevo pendiente hoy',
+        'shared.te_toca_conducir_hoy': 'Te toca conducir hoy',
+        'shared.conduce_hoy': 'Conduce hoy:',
+        'shared.tienes_plaza_hoy': 'Plaza asignada:',
+        'shared.en_reserva_hoy': 'En reserva hoy',
+        'shared.no_aparcas_hoy': 'Hoy no aparcas',
+        'shared.viaje_hoy': 'Viaje hoy',
+        'shared.sin_viajes_hoy': 'Sin viaje hoy',
+        'shared.tu': 'Tú',
+        'shared.error_generico': 'Ha ocurrido un error',
+        'shared.mes_actual': 'Mes actual',
+        'shared.semana_actual_badge': 'Semana actual',
+        'shared.ir_a_hoy': 'Ir a hoy',
+        'shared.proximo': 'Próximo:',
+        'shared.sin_conexion': 'Sin conexión a internet',
+        'shared.conexion_recuperada': 'Conexión recuperada',
 
         // ===== GROUP TYPES =====
         'group_type.flexible': '🔄 Carpool flexible',
@@ -86,6 +112,11 @@ const translations = {
         'flexible.toast_past_days': 'No puedes editar días pasados',
         'flexible.toast_is_driver': 'No puedes abandonar si eres el conductor',
         'flexible.toast_calendar_refreshed': 'Calendario actualizado',
+        'flexible.balance_viajes': 'Balance de Viajes',
+        'flexible.balance_desc': 'Trayectos conducidos (Ida y Vuelta = 2)',
+        'flexible.viajes_conducidos': 'trayectos',
+        'flexible.sin_estadisticas': 'Aún no hay viajes con conductor asignado',
+        'flexible.por_combinacion': 'Por grupo de pasajeros',
 
         // ===== FIXED =====
         'fixed.estoy_de_baja': 'Estoy de baja',
@@ -99,10 +130,14 @@ const translations = {
         'fixed.no_puedo_conducir': 'No puedo conducir',
         'fixed.festivo': 'Festivo',
         'fixed.nadie_va': 'Nadie va',
+        'fixed.quitar_festivo': 'Quitar Festivo',
+        'fixed.quitar_nadie': 'Quitar Nadie va',
+        'fixed.estado_revertido': 'Estado revertido',
         'fixed.consecutivos': 'Días consecutivos',
         'fixed.viaje_puntual': 'Crear viaje puntual',
         'fixed.configurar_rutina': 'Configurar rutina semanal',
-        'fixed.eliminar_rutina': 'Eliminar rutina semanal',
+        'fixed.editar_rutina': 'Editar Rutina',
+        'fixed.eliminar_rutina': 'Eliminar Rutina',
         'fixed.dias_viaje': 'Días de viaje',
         'fixed.confirmar_rutina': 'Confirmar rutina',
         'fixed.unirse_al_viaje': 'Unirse al viaje (Debes 1)',
@@ -117,6 +152,7 @@ const translations = {
         'fixed.quien_te_debe': '¿Quién te debe?',
         'fixed.gestion_trayecto': 'Gestión de trayecto',
         'fixed.conductor': 'Conductor',
+        'fixed.pasajeros': 'Pasajeros',
         'fixed.dia_festivo': '🌟 Día Festivo (Sin viaje)',
         'fixed.viaje_cancelado': '❌ Viaje cancelado (Nadie va)',
         'fixed.buscando_conductor': '⚠️ BUSCANDO CONDUCTOR PARA HOY',
@@ -141,7 +177,7 @@ const translations = {
         'fixed.rutina_eliminada': 'Rutina eliminada correctamente',
         'fixed.relevo_solicitado': 'Se ha solicitado un relevo para este día',
         'fixed.relevo_tomado': '¡Relevo tomado! Te deben un viaje.',
-        'fixed.mando_viaje': 'Ahora tu eres el conductor.',
+        'fixed.mando_viaje': 'Ahora tú eres el conductor.',
         'fixed.dia_festivo_marcado': 'Día festivo marcado',
         'fixed.viaje_cancelado_op': 'Viaje cancelado',
         'fixed.no_modificar_pasadas': 'No puedes modificar fechas pasadas',
@@ -171,6 +207,13 @@ const translations = {
         'fixed.nombre_actualizado': 'Nombre actualizado',
         'fixed.idioma_changed': 'Idioma cambiado a',
         'fixed.pending_relevo': '⚠️ BUSCANDO CONDUCTOR PARA HOY',
+        'fixed.miembros_titulo': 'Miembros y Orden',
+        'fixed.miembros_desc': 'Orden actual de rotación en el grupo',
+        'fixed.exportar_pdf': 'Exportar PDF del mes',
+        'fixed.pdf_generado': 'Resumen mensual descargado en PDF',
+        'fixed.icono_puntual': 'Puntual',
+        'fixed.icono_relevo': 'Relevo',
+        'fixed.icono_deuda': 'Deuda',
 
         // ===== PARKING =====
         'parking.title': '🅿️ Plazas parking',
@@ -191,7 +234,7 @@ const translations = {
         'parking.tu': '(Tú)',
         'parking.no_miembros': 'No hay miembros',
         'parking.gestionar_titulo': 'Gestionar Plazas',
-        'parking.gestionar_desc': 'Añade o elimina plazas disponibles',
+        'parking.gestionar_desc': 'Añade, reordena o elimina plazas disponibles',
         'parking.placeholder_plaza': 'Nombre (ej. P1-24)',
         'parking.no_datos': 'No hay datos de parking',
         'parking.reserva_con_slot': 'Reserva ({slot})',
@@ -209,9 +252,34 @@ const translations = {
         'parking.molde_editor_desc': 'Reordena las posiciones de plaza y reserva',
         'parking.molde_auto': '↺ Restablecer automático',
         'parking.molde_guardado': '¡Molde personalizado guardado!',
-        'parking.molde_reseteated': 'Molde restablecido al automático',
+        'parking.molde_reseteado': 'Molde restablecido al automático',
+        'parking.molde_auto_label': 'Molde automático',
+        'parking.molde_custom_label': '✦ Molde personalizado activo',
+        'parking.molde_info': 'Usa ↑↓ para mover las posiciones. Los usuarios rotarán sobre este orden cada semana.',
+        'parking.guardar': 'Guardar',
         'parking.semana': 'S',
         'parking.hoy': 'Semana Actual',
+        'parking.plazas_fijas': 'Plazas Fijas',
+        'parking.plazas_compartidas': 'Plazas Compartidas',
+        'parking.en_su_plaza': 'EN SU PLAZA',
+        'parking.plaza_libre': 'PLAZA LIBRE',
+        'parking.no_asiste': 'NO ASISTE',
+        'parking.plaza_fija_asignada': 'PLAZA FIJA ASIGNADA',
+        'parking.reserva_con_plaza': 'RESERVA CON PLAZA',
+        'parking.plaza_fija_label': 'PLAZA FIJA',
+        'parking.resumen_semana': 'Resumen de la semana',
+        'parking.asistentes': 'asistentes',
+        'parking.tipo_plaza_titulo': 'Tipo de Plaza',
+        'parking.tipo_plaza_desc': 'Selecciona tu tipo de plaza',
+        'parking.plaza_compartida_titulo': 'Plaza Compartida',
+        'parking.plaza_compartida_desc': 'Rota con otros usuarios',
+        'parking.plaza_fija_titulo': 'Plaza Fija',
+        'parking.plaza_fija_desc': 'Plaza permanente exclusiva',
+        'parking.plaza_fija_placeholder': 'Nombre de tu plaza (ej: P1-23)',
+        'parking.confirmar_plaza_fija': 'Confirmar Plaza Fija',
+        'parking.plaza_fija_error': 'Por favor, introduce un nombre para tu plaza fija',
+        'parking.error_rutina': 'Error al guardar rutina',
+        'parking.error_asistencia': 'Error al actualizar asistencia',
 
         // Days of week
         'days': ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA']
@@ -225,7 +293,7 @@ const translations = {
         'shared.unirse_codigo': 'Kodearekin sartu',
         'shared.idioma': 'Hizkuntza',
         'shared.cerrar_sesion': 'Saioa Itxi',
-        'shared.nombre_usuario': 'Erabiltzailearen izena',
+        'shared.nombre_usuario': 'Zure izen publikoa',
         'shared.volver': 'Itzuli',
         'shared.cerrar': 'Itxi',
         'shared.cancelar': 'Utzi',
@@ -233,25 +301,28 @@ const translations = {
         'shared.crear': 'Sortu',
         'shared.salir': 'Irten',
         'shared.mis_grupos': 'Nire Taldeak',
-        'shared.nuevo_grupo': 'Talde berria?',
+        'shared.nuevo_grupo': 'Talde berria',
         'shared.tienes_codigo': 'Kodea daukazu?',
         'shared.nombre_grupo': 'Taldearen izena',
-        'shared.codigo': 'XXXXXX',
+        'shared.codigo': 'KODEA',
         'shared.no_grupos': 'Oraindik ez duzu talderik',
         'shared.salir_grupo': 'Talde batetik irten',
         'shared.miembros': 'Kideak',
         'shared.ver_miembros': 'Kideak ikusi',
         'shared.no_miembros': 'Ez dago kiderik',
-        'shared.refrescar': '🔄 Eguneratu',
+        'shared.refrescar': 'Eguneratu',
         'shared.toast_invalid_code': 'Kode okerra',
         'shared.toast_already_in_group': 'Dagoeneko talde honetako kide zara',
         'shared.confirm_leave_group': 'Ziur zaude taldetik irten nahi duzula?',
         'shared.toast_left_group': 'Taldetik irten zara:',
         'shared.toast_name_saved': 'Izena gordeta',
+        'shared.toast_group_created': 'Taldea ongi sortu da',
+        'shared.toast_group_joined': 'Taldera batu zara',
         'shared.forgot_password': 'Pasahitza ahaztu duzu?',
         'shared.forgot_password_title': 'Pasahitza Berreskuratu',
         'shared.forgot_password_desc': 'Pasahitza berrezartzeko esteka bat bidaliko dizugu zure emailera.',
         'shared.email_placeholder': 'Emaila',
+        'shared.password_placeholder': 'Pasahitza',
         'shared.send_reset_email': 'Esteka bidali',
         'shared.reset_email_sent': 'Emaila bidalita! Egiaztatu zure sarrerako ontzia.',
         'shared.reset_email_error': 'Ez da konturik aurkitu email horrekin.',
@@ -272,6 +343,29 @@ const translations = {
         'shared.register_check_email': 'Egiaztatu zure emaila kontua baieztatzeko.',
         'shared.create_group_error': 'Ezin izan da taldea sortu',
         'shared.join_group_error': 'Ezin izan da taldera sartu',
+        'shared.hoy_resumen': 'Gaurko Laburpena',
+        'shared.sin_actividad_hoy': 'Ez dago gaurko aurreikusitako jarduerarik.',
+        'shared.crear_o_unirse': 'Sortu edo Batu',
+        'shared.copiar_codigo': 'Kodea kopiatu',
+        'shared.codigo_copiado': 'Kodea arbelean kopiatuta',
+        'shared.compartir': 'Partekatu',
+        'shared.share_text': 'Sartu "{name}" taldean GidaPark-en kode honekin: {code}',
+        'shared.estado_relevo_pendiente': 'Txanda eskaera gaur',
+        'shared.te_toca_conducir_hoy': 'Gaur gidatzea dagokizu',
+        'shared.conduce_hoy': 'Gaurko gidaria:',
+        'shared.tienes_plaza_hoy': 'Esleitutako plaza:',
+        'shared.en_reserva_hoy': 'Erreserban gaur',
+        'shared.no_aparcas_hoy': 'Gaur ez duzu aparkatzen',
+        'shared.viaje_hoy': 'Gaur bidaia dago',
+        'shared.sin_viajes_hoy': 'Gaur ez dago bidaiarik',
+        'shared.tu': 'Zu',
+        'shared.error_generico': 'Errore bat gertatu da',
+        'shared.mes_actual': 'Oraingo hilabetea',
+        'shared.semana_actual_badge': 'Oraingo astea',
+        'shared.ir_a_hoy': 'Gaurkora joan',
+        'shared.proximo': 'Hurrengoa:',
+        'shared.sin_conexion': 'Internet konexiorik gabe',
+        'shared.conexion_recuperada': 'Konexioa berreskuratuta',
 
         // ===== GROUP TYPES =====
         'group_type.flexible': '🔄 Malgua',
@@ -302,6 +396,11 @@ const translations = {
         'flexible.toast_past_days': 'Ezin dituzu pasatako egunak editatu',
         'flexible.toast_is_driver': 'Ezin duzu bidaia utzi gidaria bazara',
         'flexible.toast_calendar_refreshed': 'Egutegia eguneratuta',
+        'flexible.balance_viajes': 'Bidaien Balantzea',
+        'flexible.balance_desc': 'Gidatutako ibilbideak (Joan-etorria = 2)',
+        'flexible.viajes_conducidos': 'ibilbide',
+        'flexible.sin_estadisticas': 'Oraindik ez dago gidaridun bidaiarik',
+        'flexible.por_combinacion': 'Bidaiari taldearen arabera',
 
         // ===== FIXED =====
         'fixed.estoy_de_baja': 'Bajan nago',
@@ -315,10 +414,14 @@ const translations = {
         'fixed.no_puedo_conducir': 'Ezin dut gidatu',
         'fixed.festivo': 'Jai eguna',
         'fixed.nadie_va': 'Inor ez doa',
+        'fixed.quitar_festivo': 'Jai eguna kendu',
+        'fixed.quitar_nadie': 'Inor ez doa kendu',
+        'fixed.estado_revertido': 'Egoera leheneratuta',
         'fixed.consecutivos': 'Egun jarraian',
         'fixed.viaje_puntual': 'Aldi baterako bidaia sortu',
         'fixed.configurar_rutina': 'Asteko errutina konfiguratu',
-        'fixed.eliminar_rutina': 'Asteko errutina ezabatu',
+        'fixed.editar_rutina': 'Errutina Editatu',
+        'fixed.eliminar_rutina': 'Errutina Ezabatu',
         'fixed.dias_viaje': 'Bidai egunak',
         'fixed.confirmar_rutina': 'Errutina baieztatu',
         'fixed.unirse_al_viaje': 'Bidaian sartu (1 zor diozu)',
@@ -350,7 +453,7 @@ const translations = {
         'fixed.no_perteneces_grupo': 'Ez duzu talderik',
         'fixed.calendario_actualizado': 'Egutegia eguneratuta',
         'fixed.viaje_puntual_creado': 'Aldi baterako bidaia sortuta',
-        'fixed.rutina_guardada': '¡Errutina behar bezala gordeta!',
+        'fixed.rutina_guardada': 'Errutina behar bezala gordeta!',
         'fixed.selecciona_dia': 'Hautatu gutxienez egun bat',
         'fixed.error_guardar': 'Akatsa gordetzerakoan',
         'fixed.confirm_elim_rutina': 'Ziur zaude taldearentzako errutina ezabatu nahi duzula',
@@ -367,7 +470,7 @@ const translations = {
         'fixed.error_eliminar': 'Akatsa bidaia ezabatzerakoan',
         'fixed.error_union': 'Akatsa batuera prozesatzean',
         'fixed.ya_partes_viaje': 'Bidai honen parte zara jada',
-        'fixed.unido_viaje': '¡Batuta! Bidai bat zor diozu 🚗',
+        'fixed.unido_viaje': 'Batuta! Bidai bat zor diozu 🚗',
         'fixed.bajado_viaje': 'Bidaitik irten zara eta zorra bertan behera geratu da',
         'fixed.error_bajarse': 'Akatsa eskaria prozesatzean',
         'fixed.viaje_eliminado': '✅ Aldi baterako bidaia eta zorrak kitatu dira',
@@ -375,8 +478,8 @@ const translations = {
         'fixed.elim_viaje_desc': 'Atxikitutako zor guztiak ezabatuko dira.',
         'fixed.confirm_bajarse': 'Bidai honetatik irten nahi duzu?',
         'fixed.baj_descri': 'Zorra ezabatuko da.',
-        'fixed.deuda_canjeada': '¡Zorra kitatuta! Gaur honek gidatuko du',
-        'fixed.error_deuda': 'Akatsa zorra ordaindzerakoan',
+        'fixed.deuda_canjeada': 'Zorra kitatuta! Gaur honek gidatuko du',
+        'fixed.error_deuda': 'Akatsa zorra ordaintzerakoan',
         'fixed.deuda_creada': 'Zorra ongi sortuta',
         'fixed.selecciona_miembro': 'Hautatu kide bat',
         'fixed.viajes_pend': 'Zor dituzun bidaiak',
@@ -388,6 +491,13 @@ const translations = {
         'fixed.nombre_actualizado': 'Izena eguneratua',
         'fixed.idioma_changed': 'Hizkuntza aldatuta',
         'fixed.pending_relevo': '⚠️ GIDARI BATEN BILA',
+        'fixed.miembros_titulo': 'Kideak eta Ordena',
+        'fixed.miembros_desc': 'Gidatzeko ohiko errotazio ordena',
+        'fixed.exportar_pdf': 'Hileko PDFa esportatu',
+        'fixed.pdf_generado': 'Hileko laburpena PDFan deskargatu da',
+        'fixed.icono_puntual': 'Noizbehinkakoa',
+        'fixed.icono_relevo': 'Txanda',
+        'fixed.icono_deuda': 'Zorra',
 
         // ===== PARKING =====
         'parking.title': '🅿️ Aparkaleku plazak',
@@ -408,7 +518,7 @@ const translations = {
         'parking.tu': '(Zu)',
         'parking.no_miembros': 'Ez dago kiderik',
         'parking.gestionar_titulo': 'Plazak Kudeatu',
-        'parking.gestionar_desc': 'Gehitu edo ezabatu erabilgarri dauden plazak',
+        'parking.gestionar_desc': 'Gehitu, berrantolatu edo ezabatu plazak',
         'parking.placeholder_plaza': 'Izena (adib. P1-24)',
         'parking.no_datos': 'Ez dago aparkaleku daturik',
         'parking.reserva_con_slot': 'Erreserba ({slot})',
@@ -426,9 +536,34 @@ const translations = {
         'parking.molde_editor_desc': 'Plaza eta erreserba posizioak berrantolatu',
         'parking.molde_auto': '↺ Automatikoa Berrezarri',
         'parking.molde_guardado': 'Molde pertsonalizatua gordeta!',
-        'parking.molde_reseteated': 'Moldea automatikora berrezarri da',
-        'parking.semana': 'S',
-        'parking.hoy': 'Aurtengo astea',
+        'parking.molde_reseteado': 'Moldea automatikora berrezarri da',
+        'parking.molde_auto_label': 'Molde automatikoa',
+        'parking.molde_custom_label': '✦ Molde pertsonalizatua aktibo',
+        'parking.molde_info': 'Erabili ↑↓ posizioak mugitzeko. Erabiltzaileek ordena honen gainean txandakatuko dute astero.',
+        'parking.guardar': 'Gorde',
+        'parking.semana': 'A',
+        'parking.hoy': 'Aste Hau',
+        'parking.plazas_fijas': 'Plaza Finkoak',
+        'parking.plazas_compartidas': 'Plaza Partekatuak',
+        'parking.en_su_plaza': 'BERE PLAZAN',
+        'parking.plaza_libre': 'PLAZA LIBRE',
+        'parking.no_asiste': 'EZ DOA',
+        'parking.plaza_fija_asignada': 'PLAZA FINKOA ESLEITUTA',
+        'parking.reserva_con_plaza': 'ERRESERBA PLAZAREKIN',
+        'parking.plaza_fija_label': 'PLAZA FINKOA',
+        'parking.resumen_semana': 'Asteko laburpena',
+        'parking.asistentes': 'bertaratuak',
+        'parking.tipo_plaza_titulo': 'Plaza Mota',
+        'parking.tipo_plaza_desc': 'Aukeratu zure plaza mota',
+        'parking.plaza_compartida_titulo': 'Plaza Partekatua',
+        'parking.plaza_compartida_desc': 'Beste erabiltzaileekin txandakatzen da',
+        'parking.plaza_fija_titulo': 'Plaza Finkoa',
+        'parking.plaza_fija_desc': 'Plaza iraunkor esklusiboa',
+        'parking.plaza_fija_placeholder': 'Zure plazaren izena (adib: P1-23)',
+        'parking.confirmar_plaza_fija': 'Plaza Finkoa Baieztatu',
+        'parking.plaza_fija_error': 'Mesedez, sartu zure plaza finkorako izen bat',
+        'parking.error_rutina': 'Errorea errutina gordetzean',
+        'parking.error_asistencia': 'Errorea asistentzia eguneratzean',
 
         // Days of week
         'days': ['IG', 'AL', 'AS', 'AZ', 'OG', 'OL', 'LA']
@@ -438,16 +573,35 @@ const translations = {
 let currentLang = localStorage.getItem('app-lang') || 'es';
 
 function t(key) {
-    return translations[currentLang]?.[key] || key;
+    return translations[currentLang]?.[key] || translations['es']?.[key] || key;
 }
 
 function setLanguage(lang) {
     currentLang = lang;
+    window.currentLang = currentLang;
     localStorage.setItem('app-lang', lang);
+    document.documentElement.lang = lang;
     applyTranslations();
+
+    // Re-render active group view so dynamic labels refresh immediately
+    if (window.currentGroupType === 'flexible' && typeof window.refreshCalendar === 'function') {
+        window.refreshCalendar(false);
+    } else if (window.currentGroupType === 'fixed' && typeof window.renderFixedCalendar === 'function') {
+        window.renderFixedCalendar();
+        if (typeof window.updateOnLeaveButton === 'function') window.updateOnLeaveButton();
+    } else if (window.currentGroupType === 'parking' && typeof window.renderParkingCalendar === 'function') {
+        window.renderParkingCalendar();
+    }
+    if (typeof window.loadAllGroups === 'function' && !document.getElementById('tab-grupos')?.classList.contains('hidden')) {
+        window.loadAllGroups();
+    }
+    if (typeof window.loadTodayDashboard === 'function' && !document.getElementById('tab-inicio')?.classList.contains('hidden')) {
+        window.loadTodayDashboard();
+    }
 }
 
 function applyTranslations() {
+    document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         const translation = t(key);
@@ -460,10 +614,12 @@ function applyTranslations() {
         }
     });
 
-    // Update active language button
-    document.querySelectorAll('[id^="lang-"]').forEach(btn => btn.classList.remove('active'));
+    // Update active language buttons (both settings & header)
+    document.querySelectorAll('[id^="lang-"], [id^="header-lang-"]').forEach(btn => btn.classList.remove('active'));
     const activeLangBtn = document.getElementById('lang-' + currentLang);
     if (activeLangBtn) activeLangBtn.classList.add('active');
+    const headerLangBtn = document.getElementById('header-lang-' + currentLang);
+    if (headerLangBtn) headerLangBtn.classList.add('active');
 }
 
 // Global expose

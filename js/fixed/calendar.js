@@ -1,7 +1,6 @@
 // ========== FIXED CARPOOLING CALENDAR ==========
 // Adapted from GidApp js/calendar.js
 
-
 async function renderFixedCalendar() {
     const grid = document.getElementById('calendar-grid');
     const title = document.getElementById('calendar-month-year');
@@ -14,7 +13,27 @@ async function renderFixedCalendar() {
     today.setHours(0, 0, 0, 0);
 
     const monthYear = viewDate.toLocaleString(currentLang === 'eu' ? 'eu-ES' : 'es-ES', { month: 'long', year: 'numeric' });
-    if (title) title.innerText = monthYear;
+    const isCurrentMonth = y === today.getFullYear() && m === today.getMonth();
+    if (title) {
+        title.innerText = monthYear;
+        title.classList.toggle('text-amber-300', isCurrentMonth);
+        title.classList.toggle('text-white', !isCurrentMonth);
+    }
+    const badgeEl = document.getElementById('fixed-current-period-badge');
+    if (badgeEl) {
+        badgeEl.classList.toggle('hidden', !isCurrentMonth);
+    }
+    const goTodayBtn = document.getElementById('fixed-btn-go-today');
+    if (goTodayBtn) {
+        goTodayBtn.classList.toggle('hidden', isCurrentMonth);
+    }
+
+    // Localize weekday header
+    const daysArr = t('days');
+    const headerGrid = document.getElementById('fixed-calendar-weekdays');
+    if (headerGrid && Array.isArray(daysArr)) {
+        headerGrid.innerHTML = daysArr.slice(1).concat(daysArr[0]).map(d => `<div>${d}</div>`).join('');
+    }
 
     const firstDay = new Date(y, m, 1).getDay();
     const adjFirstDay = firstDay === 0 ? 6 : firstDay - 1;
@@ -37,20 +56,21 @@ async function renderFixedCalendar() {
 
         if (trip?.status === 'holiday') {
             cell.style.backgroundColor = '#7f1d1d';
+            cell.style.borderColor = '#ef4444';
             cell.innerHTML = `
-                <span class="text-[10px] font-bold text-white">${i}</span>
-                <i class="fas fa-star text-amber-400 text-[10px] mt-1"></i>
+                <span class="text-[11px] font-bold text-white">${i}</span>
+                <i class="fas fa-star text-amber-400 text-[10px] mt-0.5"></i>
             `;
         } else if (trip?.status === 'canceled') {
             cell.innerHTML = `
-                <span class="text-[10px] font-bold text-slate-400">${i}</span>
-                <i class="fas fa-times text-slate-500 text-[10px] mt-1"></i>
+                <span class="text-[11px] font-bold text-slate-400">${i}</span>
+                <i class="fas fa-times text-slate-500 text-[10px] mt-0.5"></i>
             `;
         } else if (trip?.status === 'pending_relevo') {
             cell.classList.add('warning-bg');
             cell.innerHTML = `
-                <span class="text-[10px] font-bold text-white">${i}</span>
-                <i class="fas fa-exclamation-triangle text-amber-500 text-[10px]"></i>
+                <span class="text-[11px] font-bold text-white">${i}</span>
+                <i class="fas fa-exclamation-triangle text-amber-500 text-[10px] mt-0.5"></i>
             `;
         } else if (driverId) {
             const driver = state.members.find(m => m.user_id === driverId);
@@ -66,24 +86,25 @@ async function renderFixedCalendar() {
             }
 
             cell.innerHTML = `
-                <span class="text-[10px] font-bold text-white">${i}</span>
+                <span class="text-[11px] font-bold text-white">${i}</span>
                 ${symbol}
             `;
         } else {
-            cell.innerHTML = `<span class="text-[10px] font-bold text-slate-600">${i}</span>`;
+            cell.innerHTML = `<span class="text-[11px] font-bold text-slate-600">${i}</span>`;
         }
 
         if (!isPast && window.abrirMenuViaje) cell.onclick = () => abrirMenuViaje(dStr, trip, driverId);
         grid.appendChild(cell);
     }
 
-    // Render legend
+    // Render legend sorted by rotation order
     const legend = document.getElementById('calendar-legend');
     if (legend) {
-        legend.innerHTML = state.members.map(m => `
-            <div class="flex items-center gap-1.5 ${m.is_on_leave ? 'opacity-50' : ''}">
-                <div class="w-3 h-3 rounded-full" style="background: ${escapeHtml(m.color || '#334155')}"></div>
-                <span class="text-[10px] font-bold uppercase text-slate-400">${escapeHtml(m.display_name)}${m.is_on_leave ? ' ' + t('fixed.de_baja') : ''}</span>
+        const sortedMembers = getMembersSorted();
+        legend.innerHTML = sortedMembers.map(m => `
+            <div class="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-full border border-slate-800 ${m.is_on_leave ? 'opacity-50' : ''}">
+                <div class="w-2.5 h-2.5 rounded-full" style="background: ${escapeHtml(m.color || '#334155')}"></div>
+                <span class="text-[10px] font-bold uppercase text-slate-300">${escapeHtml(m.display_name)}${m.is_on_leave ? ' ' + t('fixed.de_baja') : ''}</span>
             </div>
         `).join('');
     }
@@ -164,10 +185,6 @@ function getFullRosterDriverId(dateStr, dias, startDate, consecutivos) {
     return membersSorted[memberIndex]?.user_id || null;
 }
 
-/**
- * First rutina day on/after leave anchors where the full-roster driver is on leave (as of asOfDateStr).
- * Returns { startStr, leaveMember } or null.
- */
 function findDisplacementStart(asOfDateStr, dias, startDate, consecutivos) {
     const membersSorted = getMembersSorted();
     const onLeave = membersSorted.filter(m => wasOnLeaveOn(m, asOfDateStr));
@@ -181,7 +198,6 @@ function findDisplacementStart(asOfDateStr, dias, startDate, consecutivos) {
     if (walkStr < startStr) walkStr = startStr;
 
     const cursor = parseLocalDate(walkStr);
-    // Safety: search up to ~2 years for the first leave-owned turn
     const limit = parseLocalDate(walkStr);
     limit.setFullYear(limit.getFullYear() + 2);
 
@@ -200,7 +216,6 @@ function findDisplacementStart(asOfDateStr, dias, startDate, consecutivos) {
     return null;
 }
 
-/** Active members in circular order starting after leaveMember (skip anyone on leave that day). */
 function getActiveRotatedAfter(leaveMember, dateStr) {
     const membersSorted = getMembersSorted();
     const n = membersSorted.length;
@@ -244,7 +259,6 @@ function getRecommendedDriver(dateStr) {
 
     const displacement = findDisplacementStart(dateStr, dias, startDate, consecutivos);
     if (!displacement || dateStr < displacement.startStr) {
-        // Before the leave person's first turn: keep full roster
         return fullDriverId;
     }
 
@@ -260,36 +274,27 @@ function getRecommendedDriver(dateStr) {
 
 async function refrescarCalendario() {
     await refreshFixedData();
-    showToast(t('fixed.calendario_actualizado'));
+    showToast(t('fixed.calendario_actualizado'), 'info');
 }
 
 async function refreshFixedData() {
     if (!currentGroupId) return;
 
-    // Reload members
-    const { data: mems } = await _supabase.schema('fixed_carpooling').from('fixed_members')
-        .select('*')
-        .eq('group_id', currentGroupId);
+    const [{ data: mems }, { data: trips }, { data: debts }] = await Promise.all([
+        _supabase.schema('fixed_carpooling').from('fixed_members').select('*').eq('group_id', currentGroupId),
+        _supabase.schema('fixed_carpooling').from('fixed_trips').select('*').eq('group_id', currentGroupId),
+        _supabase.schema('fixed_carpooling').from('fixed_debts').select('*').eq('group_id', currentGroupId)
+    ]);
+
     state.members = mems || [];
     groupMembers = mems || [];
-
-    // Reload trips
-    const { data: trips } = await _supabase.schema('fixed_carpooling').from('fixed_trips')
-        .select('*')
-        .eq('group_id', currentGroupId);
     state.trips = trips || [];
     allTrips = trips || [];
-
-    // Reload debts
-    const { data: debts } = await _supabase.schema('fixed_carpooling').from('fixed_debts')
-        .select('*')
-        .eq('group_id', currentGroupId);
     state.debts = debts || [];
 
     renderFixedCalendar();
 }
 
-// Expose functions
 Object.assign(window, {
     renderFixedCalendar,
     getRecommendedDriver,

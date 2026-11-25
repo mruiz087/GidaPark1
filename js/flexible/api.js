@@ -5,14 +5,12 @@ let selectedGroupType = 'flexible';
 
 function selectGroupType(type, event) {
     selectedGroupType = type;
-    event.target.closest('.grid').querySelectorAll('.btn-selector').forEach(btn => btn.classList.remove('active'));
-    event.target.closest('.btn-selector').classList.add('active');
+    const grid = event.target.closest('.grid');
+    grid?.querySelectorAll('.btn-selector').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.btn-selector')?.classList.add('active');
 }
 
-// Create a fixed group member (to be called by createGroup if type is fixed)
 async function createFixedGroupMember(groupId) {
-    // This will be handled by fixed/groups.js
-    // For now, just placeholder
     if (window.createFixedMembership) {
         await window.createFixedMembership(groupId);
     }
@@ -21,19 +19,20 @@ async function createFixedGroupMember(groupId) {
 async function loadUserData() {
     if (!user) return;
 
-    // Try to get name from flexible first
-    let { data: flexData } = await _supabase.schema('flexible_carpooling')
+    let name = null;
+
+    // 1. Try flexible
+    const { data: flexData } = await _supabase.schema('flexible_carpooling')
         .from('flexible_members')
         .select('display_name')
         .eq('user_id', user.id)
         .limit(1)
         .maybeSingle();
+    name = flexData?.display_name;
 
-    let name = flexData?.display_name;
-
-    // If not found, try fixed
+    // 2. Try fixed
     if (!name) {
-        let { data: fixedData } = await _supabase.schema('fixed_carpooling')
+        const { data: fixedData } = await _supabase.schema('fixed_carpooling')
             .from('fixed_members')
             .select('display_name')
             .eq('user_id', user.id)
@@ -42,39 +41,57 @@ async function loadUserData() {
         name = fixedData?.display_name;
     }
 
+    // 3. Try parking
+    if (!name) {
+        const { data: parkingData } = await _supabase.schema('parking')
+            .from('members')
+            .select('display_name')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle();
+        name = parkingData?.display_name;
+    }
+
     const input = document.getElementById('user-display-name');
     if (input) input.value = name || '';
+
+    const headerUserEl = document.getElementById('header-user-name');
+    if (headerUserEl) {
+        headerUserEl.innerText = name || user.email?.split('@')[0] || '';
+    }
 }
 
 async function createGroup() {
-    const name = document.getElementById('new-group-name').value.trim();
-    if (!name) return;
+    const nameInput = document.getElementById('new-group-name');
+    const name = nameInput?.value.trim();
+    if (!name) {
+        showToast(t('shared.fill_fields'), 'warning');
+        return;
+    }
     const code = generateGroupCode(8);
     const type = selectedGroupType;
 
     const { data: newGroup, error } = await _supabase.from('groups').insert({ name, code, owner_id: user.id, type }).select().single();
     if (error) {
-        showToast(t('shared.create_group_error'));
+        showToast(t('shared.create_group_error'), 'error');
         return;
     }
 
-    // Insert into appropriate schema based on type
     if (type === 'flexible') {
         const { error: memErr } = await _supabase.schema('flexible_carpooling').from('flexible_members').insert({
             group_id: newGroup.id,
             user_id: user.id,
             user_email: user.email,
-            display_name: user.email.split('@')[0],
+            display_name: document.getElementById('user-display-name')?.value.trim() || user.email.split('@')[0],
             aporta_coche: false
         });
         if (memErr) {
-            showToast(t('shared.create_group_error'));
+            showToast(t('shared.create_group_error'), 'error');
             return;
         }
     } else if (type === 'fixed') {
         await createFixedGroupMember(newGroup.id);
     } else if (type === 'parking') {
-        // Show spot type selection modal
         if (window.openSpotTypeSelectionModal) {
             window.openSpotTypeSelectionModal(newGroup.id);
         } else {
@@ -82,12 +99,13 @@ async function createGroup() {
         }
     }
 
-    document.getElementById('new-group-name').value = '';
-    selectedGroupType = 'flexible'; // Reset
+    nameInput.value = '';
+    selectedGroupType = 'flexible';
     document.querySelectorAll('#tab-inicio .btn-selector').forEach(btn => btn.classList.remove('active'));
-    document.getElementById('type-flexible').classList.add('active');
+    document.getElementById('type-flexible')?.classList.add('active');
 
-    showToast(t('shared.toast_name_saved'));
+    showToast(t('shared.toast_group_created'), 'success');
+    if (typeof window.toggleStartActionPanel === 'function') window.toggleStartActionPanel(null);
     switchTab('grupos');
 }
 
@@ -95,7 +113,10 @@ async function joinGroup() {
     const btn = document.getElementById('btn-join-group');
     const input = document.getElementById('join-code');
     const code = input.value.trim().toUpperCase();
-    if (!code || btn.disabled) return;
+    if (!code || btn.disabled) {
+        if (!code) showToast(t('shared.fill_fields'), 'warning');
+        return;
+    }
 
     btn.disabled = true;
     btn.style.opacity = "0.5";
@@ -103,11 +124,10 @@ async function joinGroup() {
     try {
         const { data: g } = await _supabase.from('groups').select('id, type').eq('code', code).maybeSingle();
         if (!g) {
-            showToast(t('shared.toast_invalid_code'));
+            showToast(t('shared.toast_invalid_code'), 'error');
             return;
         }
 
-        // Check membership based on group type
         let schema, table;
         if (g.type === 'flexible') {
             schema = 'flexible_carpooling';
@@ -126,57 +146,62 @@ async function joinGroup() {
             .eq('user_id', user.id);
 
         if (memberCheck && memberCheck.length > 0) {
-            showToast(t('shared.toast_already_in_group'));
+            showToast(t('shared.toast_already_in_group'), 'info');
             input.value = "";
             switchTab('grupos');
             return;
         }
 
-        // Join appropriate type
+        const preferredName = document.getElementById('user-display-name')?.value.trim() || user.email.split('@')[0];
+
         if (g.type === 'flexible') {
             await _supabase.schema('flexible_carpooling').from('flexible_members').insert([
-                { group_id: g.id, user_id: user.id, user_email: user.email, aporta_coche: true }
+                { group_id: g.id, user_id: user.id, user_email: user.email, display_name: preferredName, aporta_coche: true }
             ]);
+            showToast(t('shared.toast_group_joined'), 'success');
         } else if (g.type === 'fixed') {
-            // Call fixed join function
             if (window.joinFixedGroup) {
                 await window.joinFixedGroup(g.id);
+                showToast(t('shared.toast_group_joined'), 'success');
             }
         } else if (g.type === 'parking') {
             if (window.openSpotTypeSelectionModal) {
                 try {
-                    console.log("Opening spot type selection for parking group:", g.id);
                     window.openSpotTypeSelectionModal(g.id);
                 } catch (err) {
                     console.error("Error opening spot type selection:", err);
-                    showToast("Error al abrir selección de plaza", "error");
+                    showToast(t('shared.join_group_error'), 'error');
                     return;
                 }
             } else {
-                showToast("Módulo de parking no cargado", "error");
+                showToast(t('shared.error_generico'), 'error');
                 return;
             }
         }
 
         input.value = "";
+        if (typeof window.toggleStartActionPanel === 'function') window.toggleStartActionPanel(null);
         switchTab('grupos');
     } catch (err) {
         console.error(err);
-        showToast(t('shared.join_group_error'));
+        showToast(t('shared.join_group_error'), 'error');
     } finally {
         btn.disabled = false;
         btn.style.opacity = "1";
     }
 }
 
-// Load flexible group detail 
 async function loadFlexibleGroupDetail(groupId, groupName) {
-    // Show detail view
     document.getElementById('view-groups-list').classList.add('hidden');
     document.getElementById('view-group-detail').classList.remove('hidden');
     document.getElementById('label-group-name').innerText = groupName;
 
-    // Fetch members for this group
+    const codeBadge = document.getElementById('flex-group-code-badge');
+    if (codeBadge && currentGroup?.code) {
+        codeBadge.innerText = currentGroup.code;
+        codeBadge.classList.remove('hidden');
+    }
+
     const { data: members, error: memberError } = await _supabase.schema('flexible_carpooling')
         .from('flexible_members')
         .select('*')
@@ -187,64 +212,51 @@ async function loadFlexibleGroupDetail(groupId, groupName) {
         return;
     }
 
-    // Format for compatibility with crash prevention - use data directly from flexible_members
     groupMembers = (members || []).map(m => ({
         ...m,
         user_email: m.user_email || '---',
         display_name: m.display_name || m.user_email?.split('@')[0] || 'Usuario'
     }));
 
-    // Sync car status checkbox
     const me = groupMembers.find(m => m.user_id === user.id);
     const carCheckbox = document.getElementById('group-user-has-car');
     if (carCheckbox) carCheckbox.checked = me?.aporta_coche || false;
 
-    // Load trips and refresh
+    const now = new Date();
+    viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayYMD = formatLocalYMD(now);
+
     await loadFlexibleTrips();
+    if (typeof selectDay === 'function') selectDay(todayYMD, false);
     refreshCalendar();
 }
 
 async function updateProfileName() {
-    console.log("updateProfileName called");
     const input = document.getElementById('user-display-name');
     if (!input || !user) return;
 
     const newName = input.value.trim();
-    if (!newName) return;
+    if (!newName) return showToast(t('shared.fill_fields'), 'warning');
 
     try {
-        console.log("Updating name in both schemas to:", newName);
+        await Promise.all([
+            _supabase.schema('flexible_carpooling').from('flexible_members').update({ display_name: newName }).eq('user_id', user.id),
+            _supabase.schema('fixed_carpooling').from('fixed_members').update({ display_name: newName }).eq('user_id', user.id),
+            _supabase.schema('parking').from('members').update({ display_name: newName }).eq('user_id', user.id)
+        ]);
 
-        // Update in flexible members
-        await _supabase.schema('flexible_carpooling')
-            .from('flexible_members')
-            .update({ display_name: newName })
-            .eq('user_id', user.id);
+        const headerUserEl = document.getElementById('header-user-name');
+        if (headerUserEl) headerUserEl.innerText = newName;
 
-        // Update in fixed members
-        await _supabase.schema('fixed_carpooling')
-            .from('fixed_members')
-            .update({ display_name: newName })
-            .eq('user_id', user.id);
+        showToast(t('shared.toast_name_saved'), 'success');
 
-        // Update in parking members
-        await _supabase.schema('parking')
-            .from('members')
-            .update({ display_name: newName })
-            .eq('user_id', user.id);
-
-        showToast(t('shared.toast_name_saved'));
-
-        // Refresh detail views if open
         if (typeof renderMembersList === 'function') renderMembersList();
-
-        // If we're in fixed carpooling, refresh fixed data too
         if (currentGroupType === 'fixed' && typeof refreshFixedData === 'function') {
             await refreshFixedData();
         }
     } catch (err) {
         console.error("Error updating profile name:", err);
-        showToast("Error Supabase", "error");
+        showToast(t('shared.error_generico'), 'error');
     }
 }
 
@@ -257,26 +269,37 @@ async function loadFlexibleTrips() {
 }
 
 async function confirmTripCreation() {
+    if (!selectedDate) return;
     const type = selectedTripType;
     const repeat = selectedTripRepeat;
-    let tripDates = [selectedDate];
+    const tripDates = [selectedDate];
 
+    const baseDate = parseLocalYMD(selectedDate);
     for (let i = 1; i < repeat; i++) {
-        let d = new Date(selectedDate);
-        d.setUTCDate(d.getUTCDate() + (i * 7));
-        tripDates.push(d.toISOString().split('T')[0]);
+        const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + (i * 7));
+        tripDates.push(formatLocalYMD(d));
     }
 
-    await _supabase.schema('flexible_carpooling').from('flexible_trips').insert(tripDates.map(date => ({
-        group_id: currentGroupId, date, passengers: [user.id], type
-    })));
+    const { error } = await _supabase.schema('flexible_carpooling').from('flexible_trips').insert(
+        tripDates.map(date => ({
+            group_id: currentGroupId,
+            date,
+            passengers: [user.id],
+            type
+        }))
+    );
+
+    if (error) {
+        showToast(t('shared.error_generico'), 'error');
+        return;
+    }
 
     selectedTripType = 'ida_vuelta';
     selectedTripRepeat = 0;
 
     document.querySelectorAll('#modal-trip .btn-selector').forEach(btn => btn.classList.remove('active'));
-    document.querySelector('#modal-trip [onclick*="ida_vuelta"]').classList.add('active');
-    document.querySelector('#modal-trip [onclick*="(0, event)"]').classList.add('active');
+    document.querySelector('#modal-trip [onclick*="ida_vuelta"]')?.classList.add('active');
+    document.querySelector('#modal-trip [onclick*="(0, event)"]')?.classList.add('active');
 
     closeTripModal();
     refreshCalendar();
@@ -287,28 +310,31 @@ async function setRealDriver(tripId, driverId) {
     if (!trip) return;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const tripDate = new Date(trip.date);
-    if (tripDate < today) return showToast(t('flexible.toast_past_days'));
+    const tripDate = parseLocalYMD(trip.date);
+    if (tripDate < today) return showToast(t('flexible.toast_past_days'), 'warning');
 
-    await _supabase.schema('flexible_carpooling').from('flexible_trips').update({ real_driver_id: driverId || null }).eq('id', tripId);
+    await _supabase.schema('flexible_carpooling').from('flexible_trips')
+        .update({ real_driver_id: driverId || null })
+        .eq('id', tripId);
     refreshCalendar();
 }
 
 async function toggleTrip(id, isI, count) {
-    let trip = allTrips.find(x => x.id === id);
+    const trip = allTrips.find(x => x.id === id);
     if (!trip) return;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const tripDate = new Date(trip.date);
-    if (tripDate < today) return showToast(t('flexible.toast_past_days'));
+    const tripDate = parseLocalYMD(trip.date);
+    if (tripDate < today) return showToast(t('flexible.toast_past_days'), 'warning');
 
     if (isI && trip.real_driver_id === user.id) {
-        return showToast(t('flexible.toast_is_driver'));
+        return showToast(t('flexible.toast_is_driver'), 'warning');
     }
 
-    if (isI && count === 1) await _supabase.schema('flexible_carpooling').from('flexible_trips').delete().eq('id', id);
-    else {
-        let p = isI ? trip.passengers.filter(u => u !== user.id) : [...trip.passengers, user.id];
+    if (isI && count === 1) {
+        await _supabase.schema('flexible_carpooling').from('flexible_trips').delete().eq('id', id);
+    } else {
+        const p = isI ? trip.passengers.filter(u => u !== user.id) : [...trip.passengers, user.id];
         await _supabase.schema('flexible_carpooling').from('flexible_trips').update({ passengers: p }).eq('id', id);
     }
     refreshCalendar();
@@ -316,7 +342,7 @@ async function toggleTrip(id, isI, count) {
 
 async function cleanupFutureTrips(groupId) {
     if (!user) return;
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatLocalYMD(new Date());
 
     const { data: trips, error } = await _supabase.schema('flexible_carpooling').from('flexible_trips')
         .select('*')
@@ -326,10 +352,10 @@ async function cleanupFutureTrips(groupId) {
     if (error || !trips) return;
 
     for (const trip of trips) {
-        let updates = {};
+        const updates = {};
         let changed = false;
 
-        let pax = Array.isArray(trip.passengers) ? trip.passengers : [];
+        const pax = Array.isArray(trip.passengers) ? trip.passengers : [];
         if (pax.includes(user.id)) {
             updates.passengers = pax.filter(id => id !== user.id);
             changed = true;
@@ -351,9 +377,9 @@ async function cleanupFutureTrips(groupId) {
     }
 }
 
-// Expose functions globally
 Object.assign(window, {
     selectGroupType,
+    loadUserData,
     createGroup,
     joinGroup,
     loadFlexibleGroupDetail,

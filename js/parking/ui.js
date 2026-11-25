@@ -1,12 +1,14 @@
 // State for weekly view
-let currentWeekOffset = 0; // 0 = current week, -1 = last week, etc.
+let currentWeekOffset = 0;
 window.currentGroupId = window.currentGroupId || null;
 
 function getStartOfWeek(date) {
     const d = new Date(date);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
-    return new Date(d.setDate(diff));
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
 }
 
 function getISOWeekNumber(date) {
@@ -27,118 +29,84 @@ function changeWeek(offset) {
 }
 
 function renderParkingCalendar() {
-    const grid = document.getElementById('parking-calendar-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
+    const agenda = document.getElementById('parking-week-agenda');
+    if (!agenda) return;
+    agenda.innerHTML = '';
 
-    // Calculate start of the week based on offset
     const today = new Date();
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const startOfCurrentWeek = getStartOfWeek(today);
     const viewStart = new Date(startOfCurrentWeek);
     viewStart.setDate(viewStart.getDate() + (currentWeekOffset * 7));
 
-    // Update Header
+    const locale = t('parking.lang_code') || 'es-ES';
     const endOfWeek = new Date(viewStart);
     endOfWeek.setDate(endOfWeek.getDate() + 6);
 
     const options = { month: 'short', day: 'numeric' };
-    const dateRange = `${viewStart.toLocaleDateString('es-ES', options)} - ${endOfWeek.toLocaleDateString('es-ES', options)}`;
+    const dateRange = `${viewStart.toLocaleDateString(locale, options)} - ${endOfWeek.toLocaleDateString(locale, options)}`;
     const year = viewStart.getFullYear();
     const weekNum = getISOWeekNumber(viewStart);
 
-    document.getElementById('parking-month-year').innerText = `${dateRange} ${year} (${t('parking.semana')}${weekNum})`;
+    const isCurrentWeek = currentWeekOffset === 0;
+    const monthTitleEl = document.getElementById('parking-month-year');
+    if (monthTitleEl) {
+        monthTitleEl.innerText = `${dateRange} ${year} (${t('parking.semana')}${weekNum})`;
+        monthTitleEl.classList.toggle('text-emerald-300', isCurrentWeek);
+        monthTitleEl.classList.toggle('text-white', !isCurrentWeek);
+    }
+    const weekBadgeEl = document.getElementById('parking-current-period-badge');
+    if (weekBadgeEl) {
+        weekBadgeEl.classList.toggle('hidden', !isCurrentWeek);
+    }
 
-    // Update buttons in index.html to call changeWeek instead of changeMonth
-    // We might need to override the onclick attributes dynamically or hardcode them in HTML
-    const prevBtn = document.querySelector('#view-group-detail-parking .fa-chevron-left').parentElement;
-    const nextBtn = document.querySelector('#view-group-detail-parking .fa-chevron-right').parentElement;
+    const prevBtn = document.querySelector('#view-group-detail-parking .fa-chevron-left')?.parentElement;
+    const nextBtn = document.querySelector('#view-group-detail-parking .fa-chevron-right')?.parentElement;
+    if (prevBtn) prevBtn.onclick = () => changeWeek(-1);
+    if (nextBtn) nextBtn.onclick = () => changeWeek(1);
 
-    prevBtn.onclick = () => changeWeek(-1);
-    nextBtn.onclick = () => changeWeek(1);
-
-    // Render 7 days
-    const startDate = window.parkingState?.startDate || new Date(2025, 0, 6);
+    const myId = (window.currentUser || window.user)?.id;
+    const agendaRows = [];
 
     for (let i = 0; i < 7; i++) {
-        const currentDate = new Date(viewStart);
-        currentDate.setDate(currentDate.getDate() + i);
-
-        const d = currentDate.getDate();
-
-        // Calculate week index for logic
-        const weeksPassed = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24 * 7));
-
-        // Logic Calculation
-        const N = window.parkingState?.spots?.length || 0;
-        const U = window.parkingState?.members?.length || 0;
-
-        // Render cell content
-        let cellContent = `<span class="text-[8px] font-bold text-slate-600">${d}</span>`;
-        if (currentDate.toDateString() === today.toDateString()) {
-            cellContent = `<span class="text-[8px] font-bold text-emerald-400">${d}</span>`;
-        }
-
-        // Add CLICK handler
-        const dateStr = currentDate.toISOString();
-
-        // Calculate assignments for this day
+        const currentDate = new Date(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate() + i);
+        const dateYMD = formatLocalYMD(currentDate);
         const assignments = getAssignmentsForDate(currentDate);
 
-        const myId = currentUser.id;
         const myAssign = assignments.find(a => a.user.user_id === myId);
         const isMyTurn = myAssign && myAssign.isAttending;
         const hasSpot = myAssign && myAssign.finalSpotName !== null;
         const isFixedSpot = myAssign && myAssign.isFixedSpot;
-
-        // isReserve is true if I am attending but have no spot
         const isReserve = isMyTurn && !hasSpot;
 
-        const isToday = currentDate.toDateString() === today.toDateString();
-        const isPast = currentDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const isToday = currentDate.getTime() === todayMidnight.getTime();
+        const isPast = currentDate < todayMidnight;
+        const attendingCount = assignments.filter(a => a.isAttending).length;
 
-        const cell = document.createElement('div');
-        cell.className = `calendar-cell flex flex-col items-center justify-center p-1 rounded-xl border transition-all ${isPast ? 'opacity-30' : 'cursor-pointer hover:bg-slate-800'}`;
-
-        if (isToday) cell.classList.add('ring-1', 'ring-emerald-500', 'bg-emerald-500/10');
-        else if (hasSpot) cell.classList.add('border-emerald-500/50', 'bg-emerald-500/5');
-        else cell.classList.add('bg-slate-900/40', 'border-slate-800');
-
-        let spotAnnotation = '';
+        let statusBadge = `<span class="text-[10px] font-bold text-slate-500 uppercase">${t('parking.desapuntado')}</span>`;
         if (hasSpot) {
-            const lockIcon = isFixedSpot ? '<i class="fas fa-lock text-[6px] mr-0.5"></i>' : '';
-            spotAnnotation = `<span class="text-[8px] font-black text-emerald-400 uppercase mt-1 leading-none">${lockIcon}${myAssign.finalSpotName}</span>`;
+            statusBadge = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black ${isFixedSpot ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">${isFixedSpot ? '<i class="fas fa-lock text-[9px]"></i>' : '<i class="fas fa-parking text-[9px]"></i>'}${escapeHtml(myAssign.finalSpotName)}</span>`;
         } else if (isReserve) {
-            // Check if I was originally a spot owner but marked as not attending?
-            // "isReserve" here means current status. If I am R1 and get P1, hasSpot is true.
-            // If I am R1 and don't get spot, isReserve is true.
-            spotAnnotation = `<span class="text-[8px] font-black text-amber-500 uppercase mt-1 leading-none">RES</span>`;
+            statusBadge = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30"><i class="fas fa-clock text-[9px]"></i>${t('parking.en_reserva')}</span>`;
         }
 
-        // Only show info if someone attends
-        const attendingCount = assignments.filter(a => a.status !== 'not_attending').length;
-
-        cell.innerHTML = `
-            <span class="text-[8px] font-black text-slate-500 uppercase mb-0.5">${currentDate.toLocaleDateString('es-ES', { weekday: 'short' }).substring(0, 2)}</span>
-            <span class="text-xs font-black ${isToday ? 'text-emerald-400' : 'text-slate-200'} leading-none">${currentDate.getDate()}</span>
-            <div class="h-4 flex items-center justify-center">
-                ${(attendingCount > 0) ? spotAnnotation : ''}
-            </div>
-        `;
-
-        if (!isPast) {
-            cell.onclick = () => window.openParkingDayDetail(currentDate.toISOString());
-        }
-        grid.appendChild(cell);
+        const dayLabel = currentDate.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'short' });
+        agendaRows.push(`
+            <button type="button" ${isPast ? 'disabled' : `onclick="window.openParkingDayDetail('${dateYMD}')"`}
+                class="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl border transition-all text-left ${isToday ? 'bg-emerald-950/35 border-emerald-500/60 ring-1 ring-emerald-500/30' : (hasSpot ? 'bg-slate-900/70 border-emerald-500/25' : 'bg-slate-900/50 border-slate-800/90')} ${isPast ? 'opacity-40 cursor-not-allowed' : 'hover:border-slate-600 active:scale-[0.99]'}">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isToday ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : (hasSpot ? 'bg-emerald-500/60' : 'bg-slate-700')}"></span>
+                    <div class="flex flex-col min-w-0">
+                        <span class="text-xs font-black capitalize truncate ${isToday ? 'text-emerald-300' : 'text-slate-100'}">${escapeHtml(dayLabel)}</span>
+                        <span class="text-[10px] text-slate-500 font-bold"><i class="fas fa-users mr-1"></i>${attendingCount} ${t('parking.asistentes')}</span>
+                    </div>
+                </div>
+                <div class="shrink-0 ml-2">${statusBadge}</div>
+            </button>
+        `);
     }
-}
 
-function renderDayCell(container, dayNum, innerHTML, extraClasses = '', inlineStyle = '', onClick = null) {
-    const el = document.createElement('div');
-    el.className = `fixed-day-cell flex flex-col items-center justify-center relative border ${extraClasses}`;
-    if (inlineStyle) el.style = inlineStyle;
-    el.innerHTML = innerHTML;
-    if (onClick) el.onclick = onClick;
-    container.appendChild(el);
+    agenda.innerHTML = agendaRows.join('');
 }
 
 function refreshParkingData() {
@@ -147,117 +115,86 @@ function refreshParkingData() {
     }
 }
 
-// Make functions global
-window.openSpotManagementModal = openSpotManagementModal;
-window.closeSpotManagementModal = closeSpotManagementModal;
-window.handleAddSpot = handleAddSpot;
-window.handleDeleteSpot = handleDeleteSpot;
-window.renderParkingCalendar = renderParkingCalendar;
-window.refreshParkingData = refreshParkingData;
-window.openParkingDayDetail = openParkingDayDetail;
-window.closeParkingDayDetail = closeParkingDayDetail;
-window.openParkingMembersModal = openParkingMembersModal;
-window.closeParkingMembersModal = closeParkingMembersModal;
-window.openRoutineModal = openRoutineModal;
-window.closeRoutineModal = closeRoutineModal;
-window.toggleRoutineDay = toggleRoutineDay;
-window.saveRoutine = saveRoutine;
-window.handleToggleAttendance = handleToggleAttendance;
-
 let selectedRoutineDays = [];
 let currentDetailDateStr = null;
 
-function openParkingDayDetail(dateIsoStr) {
-    const date = new Date(dateIsoStr);
-    currentDetailDateStr = dateIsoStr.split('T')[0];
+function openParkingDayDetail(dateInput) {
+    const dateYMD = String(dateInput).slice(0, 10);
+    const date = parseLocalYMD(dateYMD);
+    currentDetailDateStr = dateYMD;
 
     const N = window.parkingState.spots.length;
     const U = window.parkingState.members.length;
-    if (N === 0 || U === 0) return;
+    if (N === 0 || U === 0) {
+        showToast(t('parking.no_datos'), 'info');
+        return;
+    }
 
-    const startDate = window.parkingState.startDate || new Date(2025, 0, 6);
-    const weeksPassed = Math.floor((date - startDate) / (1000 * 60 * 60 * 24 * 7));
-    const mold = window.getMold(N, U);
-    const rotationOffset = (U > N) ? weeksPassed : 0;
-    const rotatedMembers = window.rotateUsers(window.parkingState.members, rotationOffset);
-
-    // 1. Identificar interesados
     const dayOfWeek = date.getDay() || 7;
-    const interestedIds = rotatedMembers.filter(m => {
+    const interestedIds = window.parkingState.members.filter(m => {
         const override = window.parkingState.attendance[currentDetailDateStr]?.find(a => a.user_id === m.user_id);
         if (override) return override.is_attending;
         return m.routine && m.routine.includes(dayOfWeek);
     }).map(m => m.user_id);
 
-    // 2. Reuse shared logic
     const assignments = getAssignmentsForDate(date);
-
-    // --- RENDERIZADO (Separar fijos de compartidos) ---
     const list = document.getElementById('parking-assignments-list');
-    
+    const myId = (window.currentUser || window.user)?.id;
+
     const fixedSpotAssignments = assignments.filter(a => a.isFixedSpot);
     const sharedAssignments = assignments.filter(a => !a.isFixedSpot);
-    
+
     let html = '';
-    
-    // Sección de plazas fijas
+
     if (fixedSpotAssignments.length > 0) {
         html += `<div class="mb-4">
             <h4 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <i class="fas fa-lock"></i> Plazas Fijas
+                <i class="fas fa-lock"></i> ${t('parking.plazas_fijas')}
             </h4>`;
-        
+
         html += fixedSpotAssignments.map((a) => {
-            const isMe = a.user.user_id === currentUser.id;
-            
-            let statusLabel = "NO ASISTE";
+            const isMe = a.user.user_id === myId;
+            let statusLabel = t('parking.no_asiste');
             let statusColor = "text-slate-500";
             let rowBg = "bg-slate-800/50 border-slate-700";
-            let badgeText = a.spotName || 'Unknown';
-            
+            const badgeText = a.spotName || '---';
+
             if (a.isAttending) {
-                statusLabel = "EN SU PLAZA";
+                statusLabel = t('parking.en_su_plaza');
                 statusColor = "text-indigo-400";
                 rowBg = "bg-indigo-900/20 border-indigo-500/30";
-                badgeText = a.spotName;
             } else {
-                statusLabel = "PLAZA LIBRE";
+                statusLabel = t('parking.plaza_libre');
                 statusColor = "text-emerald-400";
                 rowBg = "bg-emerald-900/10 border-emerald-500/20";
             }
-            
+
             return `
-                <div class="flex items-center justify-between p-3 rounded-xl border ${rowBg} ${isMe ? 'ring-1 ring-indigo-400' : ''} ${!a.isAttending ? 'opacity-50' : ''}">
-                    <div class="flex items-center gap-3">
-                        <div class="flex flex-col">
-                            <span class="text-white font-bold text-sm ${isMe ? 'text-indigo-300' : ''}">${escapeHtml(a.user.display_name)}</span>
-                            <span class="text-[10px] uppercase tracking-widest font-black ${statusColor}">${statusLabel}</span>
-                        </div>
+                <div class="flex items-center justify-between p-3 mb-2 rounded-xl border ${rowBg} ${isMe ? 'ring-1 ring-indigo-400' : ''} ${!a.isAttending ? 'opacity-60' : ''}">
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm ${isMe ? 'text-indigo-300' : 'text-white'}">${escapeHtml(a.user.display_name)}</span>
+                        <span class="text-[10px] uppercase tracking-widest font-black ${statusColor}">${statusLabel}</span>
                     </div>
-                    <div class="text-right">
-                        <span class="font-black text-xs px-3 py-1.5 rounded-lg ${a.isAttending ? 'bg-indigo-500 text-white' : 'bg-emerald-500/20 text-emerald-400'}">
-                            <i class="fas fa-lock text-[8px] mr-1"></i>${badgeText}
-                        </span>
-                    </div>
+                    <span class="font-black text-xs px-3 py-1.5 rounded-lg ${a.isAttending ? 'bg-indigo-500 text-white' : 'bg-emerald-500/20 text-emerald-400'}">
+                        <i class="fas fa-lock text-[8px] mr-1"></i>${escapeHtml(badgeText)}
+                    </span>
                 </div>
             `;
         }).join('');
-        
         html += `</div>`;
     }
-    
-    // Sección de plazas compartidas
+
     html += `<div>
         <h4 class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <i class="fas fa-users"></i> Plazas Compartidas
+            <i class="fas fa-users"></i> ${t('parking.plazas_compartidas')}
         </h4>`;
-    
+
     html += sharedAssignments.map((a) => {
-        const isMe = a.user.user_id === currentUser.id;
+        const isMe = a.user.user_id === myId;
         const isOriginalOwner = a.moldValue.startsWith('P');
         const assignedFixedSpot = a.assignedFixedSpot;
 
-        let statusLabel = "DESAPUNTADO";
+        let statusLabel = t('parking.desapuntado');
         let statusColor = "text-slate-500";
         let rowBg = "bg-slate-800/50 border-slate-700";
         let badgeText = a.moldValue;
@@ -265,50 +202,44 @@ function openParkingDayDetail(dateIsoStr) {
         if (a.isAttending) {
             if (a.finalSpotName) {
                 if (assignedFixedSpot) {
-                    statusLabel = "PLAZA FIJA ASIGNADA";
+                    statusLabel = t('parking.plaza_fija_asignada');
                     statusColor = "text-indigo-400";
                     rowBg = "bg-indigo-900/20 border-indigo-500/30";
                 } else {
-                    statusLabel = isOriginalOwner ? "TIENE PLAZA" : "RESERVA CON PLAZA";
+                    statusLabel = isOriginalOwner ? t('parking.tiene_plaza') : t('parking.reserva_con_plaza');
                     statusColor = "text-emerald-400";
                     rowBg = "bg-emerald-900/20 border-emerald-500/30";
                 }
                 badgeText = a.finalSpotName;
             } else {
-                statusLabel = "EN RESERVA";
+                statusLabel = t('parking.en_reserva');
                 statusColor = "text-amber-400";
                 badgeText = a.moldValue;
             }
         }
 
         return `
-            <div class="flex items-center justify-between p-3 rounded-xl border ${rowBg} ${isMe ? 'ring-1 ring-emerald-400' : ''} ${!a.isAttending ? 'opacity-40' : ''}">
-                <div class="flex items-center gap-3">
-                    <div class="flex flex-col">
-                        <span class="text-white font-bold text-sm ${isMe ? 'text-emerald-300' : ''}">${escapeHtml(a.user.display_name)}</span>
-                        <div class="flex items-center gap-2">
-                             <span class="text-[9px] font-black px-1.5 bg-slate-900 text-slate-400 rounded border border-slate-700">${a.moldValue}</span>
-                             <span class="text-[10px] uppercase tracking-widest font-black ${statusColor}">${statusLabel}</span>
-                        </div>
+            <div class="flex items-center justify-between p-3 mb-2 rounded-xl border ${rowBg} ${isMe ? 'ring-1 ring-emerald-400' : ''} ${!a.isAttending ? 'opacity-45' : ''}">
+                <div class="flex flex-col">
+                    <span class="font-bold text-sm ${isMe ? 'text-emerald-300' : 'text-white'}">${escapeHtml(a.user.display_name)}</span>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span class="text-[9px] font-black px-1.5 bg-slate-900 text-slate-400 rounded border border-slate-700">${escapeHtml(a.moldValue)}</span>
+                        <span class="text-[10px] uppercase tracking-widest font-black ${statusColor}">${statusLabel}</span>
                     </div>
                 </div>
-                <div class="text-right">
-                    <span class="font-black text-xs px-3 py-1.5 rounded-lg ${a.finalSpotName ? (assignedFixedSpot ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white') : 'bg-slate-700 text-slate-400'}">
-                        ${assignedFixedSpot ? '<i class="fas fa-lock text-[8px] mr-1"></i>' : ''}${badgeText}
-                    </span>
-                </div>
+                <span class="font-black text-xs px-3 py-1.5 rounded-lg ${a.finalSpotName ? (assignedFixedSpot ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white') : 'bg-slate-700 text-slate-300'}">
+                    ${assignedFixedSpot ? '<i class="fas fa-lock text-[8px] mr-1"></i>' : ''}${escapeHtml(badgeText)}
+                </span>
             </div>
         `;
     }).join('');
-    
     html += `</div>`;
-    
+
     list.innerHTML = html;
 
-    // ActualizarUI básica del modal
-    document.getElementById('parking-detail-date').innerText = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('parking-detail-date').innerText = formatReadableDate(currentDetailDateStr, currentLang);
     document.getElementById('modal-parking-day-detail').classList.remove('hidden');
-    document.getElementById('check-parking-attendance').checked = interestedIds.includes(currentUser.id);
+    document.getElementById('check-parking-attendance').checked = interestedIds.includes(myId);
 }
 
 function getAssignmentsForDate(date) {
@@ -316,63 +247,55 @@ function getAssignmentsForDate(date) {
     const U = window.parkingState?.members?.length || 0;
     if (N === 0 || U === 0) return [];
 
-    const dateIsoStr = date.toISOString().split('T')[0];
+    const dateIsoStr = formatLocalYMD(date);
     const startDate = window.parkingState.startDate || new Date(2025, 0, 6);
 
-    // Calculate weeksPassed based on Mondays to align rotation
     const startMonday = getStartOfWeek(new Date(startDate));
-    startMonday.setHours(0, 0, 0, 0);
     const currentMonday = getStartOfWeek(new Date(date));
-    currentMonday.setHours(0, 0, 0, 0);
     const diffTime = currentMonday - startMonday;
     const weeksPassed = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
 
-    // Separate fixed spot users from shared users
     const fixedSpotUsers = window.parkingState.members.filter(m => m.has_fixed_spot);
     const sharedUsers = window.parkingState.members.filter(m => !m.has_fixed_spot);
     const sharedU = sharedUsers.length;
 
-    // Calculate N for shared spots only (exclude fixed spots)
     const sharedSpots = window.parkingState.spots.filter(s => !s.is_fixed_spot);
     const sharedN = sharedSpots.length;
 
     const dayOfWeek = date.getDay() || 7;
 
-    // 1. Identify interested users (both fixed and shared)
     const interestedIds = window.parkingState.members.filter(m => {
         const override = window.parkingState.attendance[dateIsoStr]?.find(a => a.user_id === m.user_id);
         if (override) return override.is_attending;
         return m.routine && m.routine.includes(dayOfWeek);
     }).map(m => m.user_id);
 
-    // 2. Process fixed spot users first
-    let fixedSpotAssignments = fixedSpotUsers.map(member => {
+    const fixedSpotAssignments = fixedSpotUsers.map(member => {
         const isAttending = interestedIds.includes(member.user_id);
         const spot = window.parkingState.spots.find(s => s.id === member.fixed_spot_id);
-        const spotName = spot?.name || 'Unknown';
-        
+        const spotName = spot?.name || '---';
+
         return {
             user: member,
             moldValue: 'FIXED',
-            isAttending: isAttending,
+            isAttending,
             finalSpotName: isAttending ? spotName : null,
             priority: 0,
             isFixedSpot: true,
-            spotName: spotName,
+            spotName,
             spotAvailable: !isAttending
         };
     });
 
-    // 3. Process shared users with rotation
-    let availableFixedSpots = fixedSpotAssignments
+    const availableFixedSpots = fixedSpotAssignments
         .filter(a => a.spotAvailable)
         .map(a => ({ spotName: a.spotName, originalOwner: a.user }));
 
-    const mold = window.getMold(sharedN, sharedU, true); // Use sharedN instead of N
+    const mold = window.getMold(sharedN, sharedU, true);
     const rotationOffset = (sharedU > sharedN) ? weeksPassed : 0;
     const rotatedSharedMembers = window.rotateUsers(sharedUsers, rotationOffset);
 
-    let sharedAssignments = rotatedSharedMembers.map((member, index) => ({
+    const sharedAssignments = rotatedSharedMembers.map((member, index) => ({
         user: member,
         moldValue: mold[index] || 'R',
         isAttending: interestedIds.includes(member.user_id),
@@ -381,8 +304,7 @@ function getAssignmentsForDate(date) {
         isFixedSpot: false
     }));
 
-    // 4. Manage shared spots (P) and detect gaps
-    let availableSharedSpots = [];
+    const availableSharedSpots = [];
     sharedAssignments.forEach(a => {
         if (a.moldValue.startsWith('P')) {
             const spotIndex = parseInt(a.moldValue.substring(1)) - 1;
@@ -396,23 +318,16 @@ function getAssignmentsForDate(date) {
         }
     });
 
-    // 5. Manage Reserves (R) for shared users
-    let reserveCandidates = sharedAssignments
+    const reserveCandidates = sharedAssignments
         .filter(a => a.moldValue.startsWith('R') && a.isAttending)
-        .sort((a, b) => {
-            const numA = parseInt(a.moldValue.substring(1));
-            const numB = parseInt(b.moldValue.substring(1));
-            return numA - numB;
-        });
+        .sort((a, b) => parseInt(a.moldValue.substring(1)) - parseInt(b.moldValue.substring(1)));
 
-    // First assign available shared spots to reserves
     reserveCandidates.forEach(candidate => {
         if (availableSharedSpots.length > 0) {
             candidate.finalSpotName = availableSharedSpots.shift();
         }
     });
 
-    // Then assign available fixed spots to remaining reserves
     reserveCandidates.forEach(candidate => {
         if (!candidate.finalSpotName && availableFixedSpots.length > 0) {
             const fixedSpot = availableFixedSpots.shift();
@@ -422,12 +337,11 @@ function getAssignmentsForDate(date) {
         }
     });
 
-    // Combine both assignments
     return [...fixedSpotAssignments, ...sharedAssignments];
 }
 
 function closeParkingDayDetail() {
-    document.getElementById('modal-parking-day-detail').classList.add('hidden');
+    document.getElementById('modal-parking-day-detail')?.classList.add('hidden');
     currentDetailDateStr = null;
 }
 
@@ -437,88 +351,72 @@ function openParkingMembersModal() {
     modal.classList.remove('hidden');
 
     const list = document.getElementById('parking-members-list-general');
-    const membersBase = window.parkingState.members; // Orden original, sin rotar
+    const membersBase = window.parkingState.members;
 
-    // Separate fixed and shared members
     const fixedMembers = membersBase.filter(m => m.has_fixed_spot);
     const sharedMembers = membersBase.filter(m => !m.has_fixed_spot);
+    const sharedU = sharedMembers.length;
 
-    const sharedU = sharedMembers.length; // Only shared members for rotation
-
-    const today = new Date(); // Use today for "current week" context in members modal
+    const today = new Date();
     const startDate = window.parkingState.startDate || new Date(2025, 0, 6);
-
-    // Calculate weeksPassed based on Mondays to align rotation
     const startMonday = getStartOfWeek(new Date(startDate));
-    startMonday.setHours(0, 0, 0, 0);
     const currentMonday = getStartOfWeek(new Date(today));
-    currentMonday.setHours(0, 0, 0, 0);
     const diffTime = currentMonday - startMonday;
     const weeksPassed = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
 
     const sharedSpots = window.parkingState.spots.filter(s => !s.is_fixed_spot);
     const sharedN = sharedSpots.length;
     const mold = window.getMold(sharedN, sharedU, true);
-
-    // Calculamos el desplazamiento para las etiquetas del molde
-    const offset = (sharedU > sharedN) ? (weeksPassed % sharedU) : 0;
+    const offset = (sharedU > sharedN && sharedU > 0) ? (((weeksPassed % sharedU) + sharedU) % sharedU) : 0;
 
     let html = '';
 
-    // Sección de miembros con plaza fija
     if (fixedMembers.length > 0) {
         html += `<div class="mb-4">
             <h4 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <i class="fas fa-lock"></i> Plazas Fijas
+                <i class="fas fa-lock"></i> ${t('parking.plazas_fijas')}
             </h4>`;
-        
+
         html += fixedMembers.map(m => {
             const spot = window.parkingState.spots.find(s => s.id === m.fixed_spot_id);
-            const spotName = spot?.name || 'Unknown';
-            
+            const spotName = spot?.name || '---';
+
             return `
-                <div class="flex items-center justify-between p-4 rounded-xl bg-indigo-900/10 border border-indigo-500/20 transition-all">
+                <div class="flex items-center justify-between p-4 mb-2 rounded-xl bg-indigo-900/10 border border-indigo-500/20">
                     <div class="flex items-center gap-3">
                         <div class="w-8 h-8 rounded-lg bg-indigo-900/30 flex items-center justify-center text-[10px] font-black text-indigo-400 border border-indigo-500/30">
                             <i class="fas fa-lock"></i>
                         </div>
                         <div class="flex flex-col">
                             <span class="text-white font-bold text-sm">${escapeHtml(m.display_name)}</span>
-                            <span class="text-[9px] uppercase tracking-widest text-indigo-400 font-black">PLAZA FIJA</span>
+                            <span class="text-[9px] uppercase tracking-widest text-indigo-400 font-black">${t('parking.plaza_fija_label')}</span>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <span class="font-black text-xs px-3 py-1.5 rounded-lg bg-indigo-500 text-white">
-                            ${spotName}
-                        </span>
-                    </div>
+                    <span class="font-black text-xs px-3 py-1.5 rounded-lg bg-indigo-500 text-white">${escapeHtml(spotName)}</span>
                 </div>
             `;
         }).join('');
-        
         html += `</div>`;
     }
 
-    // Sección de miembros con plaza compartida
     html += `<div>
         <h4 class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <i class="fas fa-users"></i> Plazas Compartidas
+            <i class="fas fa-users"></i> ${t('parking.plazas_compartidas')}
         </h4>`;
-    
+
     html += sharedMembers.map((m, index) => {
-        // Buscamos qué etiqueta le toca a este usuario según la semana
-        const moldValue = mold[(index + (sharedU - offset)) % sharedU];
+        const moldValue = sharedU > 0 ? (mold[(index + (sharedU - offset)) % sharedU] || 'R') : 'R';
         const isSpot = moldValue.startsWith('P');
 
-        const statusText = isSpot ? "TIENE PLAZA" : "RESERVA";
+        const statusText = isSpot ? t('parking.tiene_plaza') : t('parking.reserva');
         const statusColor = isSpot ? "text-emerald-400" : "text-amber-400";
         const bgColor = isSpot ? "bg-emerald-900/10 border-emerald-500/20" : "bg-slate-800/50 border-slate-700";
 
         return `
-            <div class="flex items-center justify-between p-4 rounded-xl ${bgColor} border transition-all">
+            <div class="flex items-center justify-between p-4 mb-2 rounded-xl ${bgColor} border">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-[10px] font-black text-slate-500 border border-slate-700">
-                        ${moldValue}
+                    <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-700">
+                        ${escapeHtml(moldValue)}
                     </div>
                     <div class="flex flex-col">
                         <span class="text-white font-bold text-sm">${escapeHtml(m.display_name)}</span>
@@ -528,34 +426,28 @@ function openParkingMembersModal() {
             </div>
         `;
     }).join('');
-    
     html += `</div>`;
-    
+
     list.innerHTML = html;
 
-    // Show 'Edit Mold' button only for group admin
     const editBtn = document.getElementById('btn-edit-mold');
     if (editBtn) editBtn.classList.toggle('hidden', !window.parkingState.isAdmin);
 
-    // Show custom mold indicator
     const indicator = document.getElementById('mold-custom-indicator');
-    if (indicator) {
-        indicator.classList.toggle('hidden', !window.parkingState.customMold);
-    }
+    if (indicator) indicator.classList.toggle('hidden', !window.parkingState.customMold);
 }
 
 function closeParkingMembersModal() {
     document.getElementById('modal-parking-members')?.classList.add('hidden');
 }
 
-// Routine Logic
 function openRoutineModal() {
     const modal = document.getElementById('modal-parking-routine');
     modal.classList.remove('hidden');
 
-    // Load current routine
-    const myMember = window.parkingState.members.find(m => m.user_id === currentUser.id);
-    selectedRoutineDays = myMember?.routine || [1, 2, 3, 4, 5];
+    const myId = (window.currentUser || window.user)?.id;
+    const myMember = window.parkingState.members.find(m => m.user_id === myId);
+    selectedRoutineDays = myMember?.routine ? [...myMember.routine] : [1, 2, 3, 4, 5];
 
     updateRoutineUI();
 }
@@ -576,18 +468,14 @@ function toggleRoutineDay(day) {
 function updateRoutineUI() {
     document.querySelectorAll('#modal-parking-routine .day-btn-pill').forEach(btn => {
         const day = parseInt(btn.dataset.day);
-        if (selectedRoutineDays.includes(day)) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', selectedRoutineDays.includes(day));
     });
 }
 
 async function saveRoutine() {
     await window.updateRoutine(selectedRoutineDays);
     closeRoutineModal();
-    showToast(t('parking.toast_rutina_guardada'));
+    showToast(t('parking.toast_rutina_guardada'), 'success');
 }
 
 async function handleToggleAttendance() {
@@ -595,15 +483,10 @@ async function handleToggleAttendance() {
     const isAttending = document.getElementById('check-parking-attendance').checked;
     await window.toggleAttendance(currentDetailDateStr, isAttending);
 
-    // Re-render modal to show updated assignments
-    const dateIso = currentDetailDateStr + "T12:00:00Z";
-    openParkingDayDetail(dateIso);
-
-    // Also re-render calendar in background
+    openParkingDayDetail(currentDetailDateStr);
     renderParkingCalendar();
 }
 
-// Modal Logic
 function openSpotManagementModal() {
     document.getElementById('modal-manage-spots').classList.remove('hidden');
     renderSpotsList();
@@ -617,16 +500,34 @@ function renderSpotsList() {
     const list = document.getElementById('spots-list');
     if (!window.parkingState || !window.parkingState.spots) return;
 
-    list.innerHTML = window.parkingState.spots.map(s => `
-        <div class="flex justify-between items-center bg-slate-900/50 p-3 rounded-xl border border-slate-700">
-            <span class="text-sm font-bold text-slate-300">${escapeHtml(s.name)}</span>
-            <button onclick="handleDeleteSpot('${s.id}')" class="text-red-400 hover:text-red-300 p-2">
-                <i class="fas fa-trash"></i>
-            </button>
+    const spots = window.parkingState.spots;
+    list.innerHTML = spots.map((s, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === spots.length - 1;
+        return `
+        <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+                ${s.is_fixed_spot ? '<i class="fas fa-lock text-indigo-400 text-xs"></i>' : '<i class="fas fa-parking text-emerald-400 text-xs"></i>'}
+                <span class="text-sm font-bold text-slate-200 truncate">${escapeHtml(s.name)}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="handleMoveSpot('${s.id}', -1)" title="${t('parking.move_up')}"
+                    class="w-7 h-7 rounded-lg ${isFirst ? 'bg-slate-800/40 text-slate-600 cursor-not-allowed' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} text-xs flex items-center justify-center" ${isFirst ? 'disabled' : ''}>
+                    <i class="fas fa-arrow-up text-[10px]"></i>
+                </button>
+                <button type="button" onclick="handleMoveSpot('${s.id}', 1)" title="${t('parking.move_down')}"
+                    class="w-7 h-7 rounded-lg ${isLast ? 'bg-slate-800/40 text-slate-600 cursor-not-allowed' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} text-xs flex items-center justify-center" ${isLast ? 'disabled' : ''}>
+                    <i class="fas fa-arrow-down text-[10px]"></i>
+                </button>
+                <button type="button" onclick="handleDeleteSpot('${s.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center ml-1">
+                    <i class="fas fa-trash text-[10px]"></i>
+                </button>
+            </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
-    if (window.parkingState.spots.length === 0) {
+    if (spots.length === 0) {
         list.innerHTML = `<p class="text-center text-xs text-slate-500 italic py-4">${t('parking.no_plazas_creadas')}</p>`;
     }
 }
@@ -636,10 +537,14 @@ async function handleAddSpot() {
     const name = input.value.trim();
     if (!name) return;
 
-    await window.addSpot(name); // Calling logic from groups.js
-
+    await window.addSpot(name);
     input.value = '';
-    renderSpotsList(); // Re-render list with new state (updated by addSpot->loadParkingGroupDetail)
+    renderSpotsList();
+}
+
+async function handleMoveSpot(id, direction) {
+    await window.moveSpot(id, direction);
+    renderSpotsList();
 }
 
 async function handleDeleteSpot(id) {
@@ -648,15 +553,16 @@ async function handleDeleteSpot(id) {
 }
 
 // ========== MOLD EDITOR ==========
-let currentMoldDraft = []; // Temporary editable copy of the mold
+let currentMoldDraft = [];
 
 function openMoldEditorModal() {
-    const N = window.parkingState.spots.length;
-    const U = window.parkingState.members.length;
-    if (N === 0 || U === 0) return;
+    const sharedSpots = window.parkingState.spots.filter(s => !s.is_fixed_spot);
+    const sharedUsers = window.parkingState.members.filter(m => !m.has_fixed_spot);
+    const N = sharedSpots.length;
+    const U = sharedUsers.length;
+    if (U === 0) return;
 
-    // Start with current active mold (custom or auto)
-    currentMoldDraft = [...window.getMold(N, U)];
+    currentMoldDraft = [...window.getMold(N, U, true)];
     renderMoldEditor();
     document.getElementById('modal-mold-editor').classList.remove('hidden');
 }
@@ -681,8 +587,8 @@ function renderMoldEditor() {
 
         return `
             <div class="flex items-center gap-3 p-3 rounded-xl border ${rowBg} transition-all">
-                <span class="font-black text-xs px-2 py-1 rounded-lg ${badgeColor} min-w-[36px] text-center">${slot}</span>
-                <span class="flex-1 text-slate-400 text-[10px] uppercase font-bold">${isP ? 'Plaza' : 'Reserva'}</span>
+                <span class="font-black text-xs px-2 py-1 rounded-lg ${badgeColor} min-w-[36px] text-center">${escapeHtml(slot)}</span>
+                <span class="flex-1 text-slate-400 text-[10px] uppercase font-bold">${isP ? t('parking.plaza') : t('parking.reserva')}</span>
                 <div class="flex gap-1">
                     <button onclick="window.moveMoldSlot(${index}, -1)"
                         class="w-8 h-8 rounded-lg ${isFirst ? 'bg-slate-800/30 text-slate-600 cursor-not-allowed' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'} flex items-center justify-center text-xs font-black transition-all"
@@ -695,13 +601,12 @@ function renderMoldEditor() {
         `;
     }).join('');
 
-    // Update header indicator
     const statusEl = document.getElementById('mold-editor-status');
     if (statusEl) {
         if (isCustomActive) {
-            statusEl.innerHTML = `<span class="text-[9px] font-black text-amber-400 uppercase tracking-widest">✦ Molde personalizado activo</span>`;
+            statusEl.innerHTML = `<span class="text-[9px] font-black text-amber-400 uppercase tracking-widest">${t('parking.molde_custom_label')}</span>`;
         } else {
-            statusEl.innerHTML = `<span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Molde automático</span>`;
+            statusEl.innerHTML = `<span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">${t('parking.molde_auto_label')}</span>`;
         }
     }
 }
@@ -709,7 +614,6 @@ function renderMoldEditor() {
 function moveMoldSlot(index, direction) {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= currentMoldDraft.length) return;
-    // Swap
     [currentMoldDraft[index], currentMoldDraft[newIndex]] = [currentMoldDraft[newIndex], currentMoldDraft[index]];
     renderMoldEditor();
 }
@@ -720,32 +624,49 @@ async function saveMoldEditor() {
         await window.saveCustomMold([...currentMoldDraft]);
         closeMoldEditorModal();
         renderParkingCalendar();
-        showToast(t('parking.molde_guardado'));
+        showToast(t('parking.molde_guardado'), 'success');
     } catch (e) {
         console.error('saveMoldEditor error:', e);
-        showToast('❌ ' + (e?.message || 'Error al guardar el molde'));
+        showToast(t('shared.error_generico'), 'error');
     }
 }
 
 async function resetMoldEditor() {
     try {
         await window.resetCustomMold();
-        // Refresh draft to auto mold
-        const N = window.parkingState.spots.length;
-        const U = window.parkingState.members.length;
-        currentMoldDraft = [...window.buildMold(N, U)];
+        const sharedSpots = window.parkingState.spots.filter(s => !s.is_fixed_spot);
+        const sharedUsers = window.parkingState.members.filter(m => !m.has_fixed_spot);
+        currentMoldDraft = [...window.buildMold(sharedSpots.length, sharedUsers.length)];
         renderMoldEditor();
         renderParkingCalendar();
-        showToast(t('parking.molde_reseteado'));
-    } catch (e) {
-        showToast('Error al restablecer el molde');
+        showToast(t('parking.molde_reseteado'), 'info');
+    } catch {
+        showToast(t('shared.error_generico'), 'error');
     }
 }
 
-// Register new global functions
-window.openMoldEditorModal = openMoldEditorModal;
-window.closeMoldEditorModal = closeMoldEditorModal;
-window.moveMoldSlot = moveMoldSlot;
-window.saveMoldEditor = saveMoldEditor;
-window.resetMoldEditor = resetMoldEditor;
-
+Object.assign(window, {
+    changeWeek,
+    getAssignmentsForDate,
+    openSpotManagementModal,
+    closeSpotManagementModal,
+    handleAddSpot,
+    handleMoveSpot,
+    handleDeleteSpot,
+    renderParkingCalendar,
+    refreshParkingData,
+    openParkingDayDetail,
+    closeParkingDayDetail,
+    openParkingMembersModal,
+    closeParkingMembersModal,
+    openRoutineModal,
+    closeRoutineModal,
+    toggleRoutineDay,
+    saveRoutine,
+    handleToggleAttendance,
+    openMoldEditorModal,
+    closeMoldEditorModal,
+    moveMoldSlot,
+    saveMoldEditor,
+    resetMoldEditor
+});

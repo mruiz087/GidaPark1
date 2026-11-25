@@ -10,71 +10,69 @@ let state = {
 };
 
 async function createFixedMembership(groupId) {
-    // Get member count to assign order_index
     const { count } = await _supabase.schema('fixed_carpooling').from('fixed_members')
         .select('*', { count: 'exact', head: true })
         .eq('group_id', groupId);
 
-    const memberColor = MEMBER_COLORS[count % MEMBER_COLORS.length];
+    const memberColor = MEMBER_COLORS[(count || 0) % MEMBER_COLORS.length];
+    const preferredName = document.getElementById('user-display-name')?.value.trim() || currentUser.email.split('@')[0];
 
     await _supabase.schema('fixed_carpooling').from('fixed_members').insert({
         group_id: groupId,
         user_id: currentUser.id,
         order_index: (count || 0) + 1,
-        display_name: currentUser.email.split('@')[0],
+        display_name: preferredName,
         color: memberColor
     });
 }
 
 async function joinFixedGroup(groupId) {
-    // Get member count to assign order_index and color
     const { count } = await _supabase.schema('fixed_carpooling').from('fixed_members')
         .select('*', { count: 'exact', head: true })
         .eq('group_id', groupId);
 
-    const memberColor = MEMBER_COLORS[count % MEMBER_COLORS.length];
+    const memberColor = MEMBER_COLORS[(count || 0) % MEMBER_COLORS.length];
+    const preferredName = document.getElementById('user-display-name')?.value.trim() || currentUser.email.split('@')[0];
 
     await _supabase.schema('fixed_carpooling').from('fixed_members').insert({
         group_id: groupId,
         user_id: currentUser.id,
         order_index: (count || 0) + 1,
-        display_name: currentUser.email.split('@')[0],
+        display_name: preferredName,
         color: memberColor
     });
 }
 
 async function loadFixedGroupDetail(groupId, groupName) {
-    // Load members
-    const { data: mems } = await _supabase.schema('fixed_carpooling').from('fixed_members')
-        .select('*')
-        .eq('group_id', groupId);
+    const [{ data: mems }, { data: trips }, { data: debts }] = await Promise.all([
+        _supabase.schema('fixed_carpooling').from('fixed_members').select('*').eq('group_id', groupId),
+        _supabase.schema('fixed_carpooling').from('fixed_trips').select('*').eq('group_id', groupId),
+        _supabase.schema('fixed_carpooling').from('fixed_debts').select('*').eq('group_id', groupId)
+    ]);
+
     state.members = mems || [];
-    groupMembers = mems || []; // For compatibility
-
-    // Load trips
-    const { data: trips } = await _supabase.schema('fixed_carpooling').from('fixed_trips')
-        .select('*')
-        .eq('group_id', groupId);
+    groupMembers = mems || [];
     state.trips = trips || [];
-    allTrips = trips || []; // For compatibility
-
-    // Load debts
-    const { data: debts } = await _supabase.schema('fixed_carpooling').from('fixed_debts')
-        .select('*')
-        .eq('group_id', groupId);
+    allTrips = trips || [];
     state.debts = debts || [];
 
-    // Update UI
     document.getElementById('view-groups-list').classList.add('hidden');
     document.getElementById('view-group-detail-fixed').classList.remove('hidden');
     document.getElementById('label-group-name-fixed').innerText = groupName;
 
-    // Render calendar for fixed groups
+    const codeBadge = document.getElementById('fixed-group-code-badge');
+    if (codeBadge && currentGroup?.code) {
+        codeBadge.innerText = currentGroup.code;
+        codeBadge.classList.remove('hidden');
+    }
+
+    const now = new Date();
+    viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
+
     if (window.renderFixedCalendar) {
         await renderFixedCalendar();
     }
 
-    // Update "On Leave" button state
     if (window.updateOnLeaveButton) {
         updateOnLeaveButton();
     }
@@ -88,7 +86,7 @@ async function leaveFixedGroup(groupId) {
         .eq('group_id', groupId)
         .eq('user_id', currentUser.id);
 
-    showToast(t('shared.toast_left_group'));
+    showToast(t('shared.toast_left_group'), 'info');
 
     if (currentGroupId === groupId) {
         currentGroupId = null;
@@ -100,7 +98,6 @@ async function leaveFixedGroup(groupId) {
     loadAllGroups();
 }
 
-// Expose functions globally
 Object.assign(window, {
     createFixedMembership,
     joinFixedGroup,

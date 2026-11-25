@@ -13,41 +13,40 @@ async function crearViajePuntualDirecto(date) {
     });
 
     if (!error) {
-        showToast(t('fixed.viaje_puntual_creado'));
+        showToast(t('fixed.viaje_puntual_creado'), 'success');
         await refreshFixedData();
         cerrarModal();
+    } else {
+        showToast(t('fixed.error_guardar'), 'error');
     }
 }
 
 async function guardarConfiguracionMaestra() {
-    if (!selectedDays.length) return showToast(t('fixed.selecciona_dia'), "error");
+    if (!selectedDays.length) return showToast(t('fixed.selecciona_dia'), 'warning');
 
     const nuevaRutina = {
         dias: selectedDays,
-        fecha_inicio: new Date().toISOString(),
+        fecha_inicio: currentGroup?.metadata?.rutina?.fecha_inicio || new Date().toISOString(),
         consecutivos: parseInt(document.getElementById('consectuvios-input')?.value || 2)
     };
 
     try {
-        // Guardar la configuración de la rutina
         const { error: rutinaError } = await _supabase.from('groups').update({
             metadata: { ...currentGroup.metadata, rutina: nuevaRutina }
         }).eq('id', currentGroup.id);
 
         if (rutinaError) throw rutinaError;
 
-        // Guardar el orden de los miembros en la base de datos
         await Promise.all(state.members.map(member =>
             _supabase.schema('fixed_carpooling').from('fixed_members')
                 .update({ order_index: member.order_index })
                 .eq('id', member.id)
         ));
 
-        // Actualizar el estado local
         if (!currentGroup.metadata) currentGroup.metadata = {};
         currentGroup.metadata.rutina = nuevaRutina;
 
-        showToast(t('fixed.rutina_guardada'));
+        showToast(t('fixed.rutina_guardada'), 'success');
 
         document.getElementById('modal-config-rutina').classList.add('hidden');
         cerrarModal();
@@ -56,16 +55,15 @@ async function guardarConfiguracionMaestra() {
         renderFixedCalendar();
     } catch (error) {
         console.error("Error Supabase:", error);
-        showToast(t('fixed.error_guardar') + ": " + error.message, "error");
+        showToast(t('fixed.error_guardar') + ": " + error.message, 'error');
     }
 }
 
-// No se utiliza
 async function confirmarEliminarRutina() {
     if (!currentGroup) return;
 
     const ok = await showConfirm(
-        `${t('fixed.confirm_elim_rutina')} "${currentGroup.name}"? ${t('fixed.elim_rutina_desc')}`
+        `${t('fixed.confirm_elim_rutina')} "${currentGroup.name}"?\n\n${t('fixed.elim_rutina_desc')}`
     );
     if (!ok) return;
 
@@ -82,21 +80,21 @@ async function confirmarEliminarRutina() {
             currentGroup.metadata.rutina = { dias: [], fecha_inicio: null };
         }
 
-        showToast(t('fixed.rutina_eliminada'));
+        document.getElementById('modal-config-rutina')?.classList.add('hidden');
+        showToast(t('fixed.rutina_eliminada'), 'info');
         await refreshFixedData();
     } catch (err) {
         console.error("Error al eliminar rutina:", err);
-        showToast(t('fixed.error_eliminar'));
+        showToast(t('fixed.error_eliminar'), 'error');
     }
 }
 
 async function pedirRelevo() {
     const dateStr = document.getElementById('modal-viaje').dataset.date;
-    if (!currentGroupId || !currentUser) return showToast("Error: Sesión incompleta", "error");
+    if (!currentGroupId || !currentUser) return showToast(t('shared.error_generico'), 'error');
     if (!assertNotPastDate(dateStr)) return;
 
     try {
-        // 1. Check if record exists
         const { data: existing } = await _supabase.schema('fixed_carpooling').from('fixed_trips')
             .select('id')
             .eq('group_id', currentGroupId)
@@ -124,13 +122,13 @@ async function pedirRelevo() {
 
         if (result.error) throw result.error;
 
-        showToast(t('fixed.relevo_solicitado'));
+        showToast(t('fixed.relevo_solicitado'), 'info');
         await refreshFixedData();
         cerrarModal();
         if (typeof renderFixedCalendar === 'function') renderFixedCalendar();
     } catch (err) {
         console.error("Error in pedirRelevo:", err);
-        showToast("Error Supabase: " + (err.message || "desconocido"), "error");
+        showToast(t('shared.error_generico'), 'error');
     }
 }
 
@@ -183,22 +181,22 @@ async function tomarRelevo() {
                 });
             }
             await simplificarDeudas(currentGroupId);
-            showToast(t('fixed.relevo_tomado'));
+            showToast(t('fixed.relevo_tomado'), 'success');
         } else {
-            showToast(t('fixed.mando_viaje'));
+            showToast(t('fixed.mando_viaje'), 'success');
         }
 
         await refreshFixedData();
         cerrarModal();
     } catch (err) {
         console.error("Error en tomarRelevo:", err);
-        showToast(t('fixed.error_union'), "error");
+        showToast(t('fixed.error_union'), 'error');
     }
 }
 
 async function marcarEspecial(tipo) {
     const dateStr = document.getElementById('modal-viaje').dataset.date;
-    if (!currentGroupId) return showToast("Error: Grupo no seleccionado", "error");
+    if (!currentGroupId) return showToast(t('shared.error_generico'), 'error');
     if (!assertNotPastDate(dateStr)) return;
 
     try {
@@ -210,7 +208,7 @@ async function marcarEspecial(tipo) {
 
         if (existing?.status === tipo) {
             await _supabase.schema('fixed_carpooling').from('fixed_trips').delete().eq('id', existing.id);
-            showToast("Estado revertido");
+            showToast(t('fixed.estado_revertido'), 'info');
         } else {
             const payload = {
                 group_id: currentGroupId,
@@ -226,7 +224,7 @@ async function marcarEspecial(tipo) {
             } else {
                 await _supabase.schema('fixed_carpooling').from('fixed_trips').insert(payload);
             }
-            showToast(tipo === 'holiday' ? t('fixed.dia_festivo_marcado') : t('fixed.viaje_cancelado_op'));
+            showToast(tipo === 'holiday' ? t('fixed.dia_festivo_marcado') : t('fixed.viaje_cancelado_op'), 'info');
         }
 
         await refreshFixedData();
@@ -234,7 +232,7 @@ async function marcarEspecial(tipo) {
         if (typeof renderFixedCalendar === 'function') renderFixedCalendar();
     } catch (err) {
         console.error("Error in marcarEspecial:", err);
-        showToast("Error Supabase: " + (err.message || "desconocido"), "error");
+        showToast(t('shared.error_generico'), 'error');
     }
 }
 
@@ -265,13 +263,13 @@ async function tomarLugar() {
             await _supabase.schema('fixed_carpooling').from('fixed_trips').insert(payload);
         }
 
-        showToast("¡Ahora conduces tú!");
+        showToast(t('fixed.mando_viaje'), 'success');
         await refreshFixedData();
         cerrarModal();
         renderFixedCalendar();
     } catch (err) {
         console.error("Error al coger viaje:", err);
-        showToast(t('fixed.error_eliminar'), "error");
+        showToast(t('fixed.error_eliminar'), 'error');
     }
 }
 
@@ -290,13 +288,13 @@ async function marcarBaja() {
         if (trip) {
             if (trip.type === 'single' && trip.creator_id === currentUser.id) {
                 await _supabase.schema('fixed_carpooling').from('fixed_trips').delete().eq('id', trip.id);
-                showToast(t('fixed.viaje_eliminado'));
+                showToast(t('fixed.viaje_eliminado'), 'info');
             } else {
                 await _supabase.schema('fixed_carpooling').from('fixed_trips').update({
                     effective_id: null,
                     status: 'canceled'
                 }).eq('id', trip.id);
-                showToast(t('fixed.bajado_viaje'));
+                showToast(t('fixed.bajado_viaje'), 'info');
             }
         } else {
             await _supabase.schema('fixed_carpooling').from('fixed_trips').insert({
@@ -305,7 +303,7 @@ async function marcarBaja() {
                 status: 'canceled',
                 effective_id: null
             });
-            showToast(t('fixed.viaje_cancelado_op'));
+            showToast(t('fixed.viaje_cancelado_op'), 'info');
         }
 
         await refreshFixedData();
@@ -313,7 +311,7 @@ async function marcarBaja() {
         renderFixedCalendar();
     } catch (err) {
         console.error("Error in marcarBaja:", err);
-        showToast("Error al cancelar viaje", "error");
+        showToast(t('fixed.error_eliminar'), 'error');
     }
 }
 
@@ -322,7 +320,7 @@ async function eliminarViajePuntual() {
     const dateStr = modal.dataset.date;
 
     if (!currentGroupId || !currentUser?.id) {
-        showToast("Error de sesión");
+        showToast(t('shared.error_generico'), 'error');
         return;
     }
     if (!assertNotPastDate(dateStr)) return;
@@ -335,21 +333,16 @@ async function eliminarViajePuntual() {
             .single();
 
         if (fetchError || !trip) {
-            showToast(t('fixed.viaje_no_encontrado'));
+            showToast(t('fixed.viaje_no_encontrado'), 'error');
             return;
         }
 
-        if (trip.type !== 'single') {
-            showToast(t('fixed.sin_permisos'));
+        if (trip.type !== 'single' || trip.creator_id !== currentUser.id) {
+            showToast(t('fixed.sin_permisos'), 'error');
             return;
         }
 
-        if (trip.creator_id !== currentUser.id) {
-            showToast(t('fixed.sin_permisos'));
-            return;
-        }
-
-        const confirmed = await showConfirm(`${t('fixed.confirm_elim_viaje')} ${t('fixed.elim_viaje_desc')}`);
+        const confirmed = await showConfirm(`${t('fixed.confirm_elim_viaje')}\n\n${t('fixed.elim_viaje_desc')}`);
         if (!confirmed) return;
 
         const pasajeros = trip.metadata?.pasajeros || [];
@@ -368,20 +361,19 @@ async function eliminarViajePuntual() {
 
         if (tripError) throw tripError;
 
-        showToast(t('fixed.viaje_eliminado'));
+        showToast(t('fixed.viaje_eliminado'), 'success');
         await refreshFixedData();
         cerrarModal();
         renderFixedCalendar();
-
     } catch (err) {
         console.error(err);
-        showToast(t('fixed.error_eliminar'));
+        showToast(t('fixed.error_eliminar'), 'error');
     }
 }
 
 async function bajarseViajePuntual(trip) {
     if (trip?.date && !assertNotPastDate(trip.date)) return;
-    if (!await showConfirm(`${t('fixed.confirm_bajarse')}<br><br>${t('fixed.baj_descri')}`)) return;
+    if (!await showConfirm(`${t('fixed.confirm_bajarse')}\n\n${t('fixed.baj_descri')}`)) return;
 
     try {
         const pasajeros = trip.metadata?.pasajeros || [];
@@ -403,21 +395,20 @@ async function bajarseViajePuntual(trip) {
             throw debtError;
         }
 
-        showToast(t('fixed.bajado_viaje'));
+        showToast(t('fixed.bajado_viaje'), 'info');
         await refreshFixedData();
         cerrarModal();
         renderFixedCalendar();
-
     } catch (err) {
         console.error("Error al bajarse del viaje:", err);
-        showToast(t('fixed.error_bajarse'), "error");
+        showToast(t('fixed.error_bajarse'), 'error');
     }
 }
 
-// Expose functions globally
 Object.assign(window, {
     crearViajePuntualDirecto,
     guardarConfiguracionMaestra,
+    confirmarEliminarRutina,
     pedirRelevo,
     tomarRelevo,
     marcarEspecial,

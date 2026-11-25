@@ -3,11 +3,11 @@ window.currentGroupId = null;
 
 window.parkingState = {
     members: [],
-    spots: [], // P1, P2...
-    mold: [],   // The logic mold [P1, R1, P2...]
-    attendance: {}, // { "YYYY-MM-DD": [ { user_id, is_attending } ] }
-    customMold: null, // Custom mold set by group owner, or null to use auto
-    isOwner: false    // Whether the current user is the group creator
+    spots: [],
+    mold: [],
+    attendance: {},
+    customMold: null,
+    isOwner: false
 };
 
 // 1. Join Parking Group
@@ -18,20 +18,16 @@ async function joinParkingGroup(groupId, spotType = 'shared', fixedSpotName = nu
         return;
     }
 
-    console.log("joinParkingGroup start for:", u.id, "target group:", groupId, "spotType:", spotType);
-
     try {
         let fixedSpotId = null;
 
-        // If fixed spot, create the spot first
         if (spotType === 'fixed' && fixedSpotName) {
-            // Get max order for spots
             const { data: existingSpots } = await _supabase.schema('parking').from('spots')
                 .select('order_index')
                 .eq('group_id', groupId)
                 .order('order_index', { ascending: false })
                 .limit(1);
-            
+
             const maxOrder = existingSpots?.[0]?.order_index || 0;
 
             const { data: newSpot, error: spotError } = await _supabase.schema('parking').from('spots').insert({
@@ -42,41 +38,31 @@ async function joinParkingGroup(groupId, spotType = 'shared', fixedSpotName = nu
                 owner_id: u.id
             }).select().single();
 
-            if (spotError) {
-                console.error("Error creating fixed spot:", spotError);
-                throw spotError;
-            }
-
+            if (spotError) throw spotError;
             fixedSpotId = newSpot.id;
-            console.log("Created fixed spot:", newSpot);
         }
 
-        // Get member count to assign order_index (only for shared spots)
         const { count, error: countErr } = await _supabase.schema('parking').from('members')
             .select('*', { count: 'exact', head: true })
             .eq('group_id', groupId);
 
         if (countErr) console.warn("Count error (ignorable if first member):", countErr);
 
+        const preferredName = document.getElementById('user-display-name')?.value.trim() || u.email.split('@')[0];
+
         const memberData = {
             group_id: groupId,
             user_id: u.id,
-            display_name: u.email.split('@')[0],
+            display_name: preferredName,
             order_index: (count || 0) + 1,
-            is_admin: (count === 0), // First member is admin
-            routine: [1, 2, 3, 4, 5], // Mon-Fri by default
+            is_admin: (count === 0),
+            routine: [1, 2, 3, 4, 5],
             has_fixed_spot: (spotType === 'fixed'),
             fixed_spot_id: fixedSpotId
         };
 
         const { error } = await _supabase.schema('parking').from('members').insert(memberData);
-
-        if (error) {
-            console.error("Error joining parking group:", error);
-            throw error;
-        }
-
-        console.log("Successfully joined parking group:", groupId);
+        if (error) throw error;
     } catch (err) {
         console.error("Exception in joinParkingGroup:", err);
         throw err;
@@ -85,20 +71,22 @@ async function joinParkingGroup(groupId, spotType = 'shared', fixedSpotName = nu
 
 // 2. Load Parking Data
 async function loadParkingGroupDetail(groupId, groupName) {
-    // 1. UI Switch
-    ['view-groups-list', 'view-group-detail', 'view-group-detail-fixed', 'view-group-detail-parking'].forEach(id => {
+    ['view-groups-list', 'view-group-detail', 'view-group-detail-fixed', 'view-group-detail-parking', 'view-group-members'].forEach(id => {
         document.getElementById(id)?.classList.add('hidden');
     });
     document.getElementById('view-group-detail-parking').classList.remove('hidden');
 
-    // Labels
     document.getElementById('parking-group-title').innerText = groupName;
-    window.currentGroupId = groupId; // Set global
+    window.currentGroupId = groupId;
 
-    // 2. Load Data (Parallel) - Simplified Fetch
+    const codeBadge = document.getElementById('parking-group-code-badge');
+    if (codeBadge && currentGroup?.code) {
+        codeBadge.innerText = currentGroup.code;
+        codeBadge.classList.remove('hidden');
+    }
+
     const p1 = _supabase.schema('parking').from('members').select('*').eq('group_id', groupId).order('order_index');
     const p2 = _supabase.schema('parking').from('spots').select('*').eq('group_id', groupId).order('order_index');
-    // Note: only select columns we know exist. Do NOT include 'created_by' unless confirmed in schema.
     const p3 = _supabase.from('groups').select('created_at, custom_mold').eq('id', groupId).single();
 
     const [membersRes, spotsRes, groupRes] = await Promise.all([p1, p2, p3]);
@@ -111,52 +99,32 @@ async function loadParkingGroupDetail(groupId, groupName) {
     window.parkingState.spots = spotsRes.data || [];
     window.parkingState.startDate = groupRes.data?.created_at ? new Date(groupRes.data.created_at) : new Date();
 
-    // Load custom mold — primary source: Supabase, fallback: localStorage
-    // 1. Obtener el dato
     let rawCustomMold = groupRes.data?.custom_mold;
-    
-    // 2. Si es el formato string de Postgres "{a,b}", lo limpiamos
     if (typeof rawCustomMold === 'string' && rawCustomMold.startsWith('{')) {
         rawCustomMold = rawCustomMold.replace(/[{}]/g, '').split(',');
-    } 
-    // 3. Si es un string JSON standard
-    else if (typeof rawCustomMold === 'string') {
-        try { rawCustomMold = JSON.parse(rawCustomMold); } catch(e) { rawCustomMold = null; }
+    } else if (typeof rawCustomMold === 'string') {
+        try { rawCustomMold = JSON.parse(rawCustomMold); } catch { rawCustomMold = null; }
     }
-    
-    // 4. Validar que sea un array con contenido
-    let resolvedMold = (Array.isArray(rawCustomMold) && rawCustomMold.length > 0) ? rawCustomMold : null;
 
+    let resolvedMold = (Array.isArray(rawCustomMold) && rawCustomMold.length > 0) ? rawCustomMold : null;
     if (!resolvedMold) {
-        // Supabase returned null — try localStorage fallback
         const localVal = localStorage.getItem(`parking_custom_mold_${groupId}`);
         if (localVal) {
             try {
                 const parsed = JSON.parse(localVal);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    resolvedMold = parsed;
-                    console.log('[Parking] custom_mold loaded from localStorage fallback:', resolvedMold);
-                }
-            } catch (e) { /* ignore parse errors */ }
+                if (Array.isArray(parsed) && parsed.length > 0) resolvedMold = parsed;
+            } catch { /* ignore */ }
         }
-    } else {
-        console.log('[Parking] custom_mold loaded from Supabase:', resolvedMold);
     }
 
     window.parkingState.customMold = resolvedMold;
 
-    // Detect admin status for current user
     const currentUid = (window.currentUser || window.user)?.id;
     const myMember = window.parkingState.members.find(m => m.user_id === currentUid);
-
-    // Check if user is admin (true if is_admin column is true, or fallback to order_index === 1)
     window.parkingState.isAdmin = !!(myMember?.is_admin || (myMember?.order_index === 1));
-    console.log('[Parking] User admin status:', window.parkingState.isAdmin);
 
-    // Fetch attendance for current range (will be called again by calendar render if range changes)
     await fetchAttendanceRange();
 
-    // 3. Render
     if (window.renderParkingCalendar) {
         renderParkingCalendar();
     }
@@ -165,8 +133,6 @@ async function loadParkingGroupDetail(groupId, groupName) {
 async function fetchAttendanceRange() {
     if (!window.currentGroupId) return;
 
-    // For simplicity, fetch all attendance for this group. 
-    // In a huge app, we'd limit to current view range.
     const { data, error } = await _supabase.schema('parking')
         .from('attendance')
         .select('*')
@@ -177,9 +143,8 @@ async function fetchAttendanceRange() {
         return;
     }
 
-    // Organize by date
     window.parkingState.attendance = {};
-    data.forEach(at => {
+    (data || []).forEach(at => {
         if (!window.parkingState.attendance[at.date]) window.parkingState.attendance[at.date] = [];
         window.parkingState.attendance[at.date].push(at);
     });
@@ -196,11 +161,10 @@ async function updateRoutine(routine) {
 
     if (error) {
         console.error("Error updating routine:", error);
-        alert("Error al guardar rutina");
+        showToast(t('parking.error_rutina'), 'error');
         return;
     }
 
-    // Refresh state
     await loadParkingGroupDetail(window.currentGroupId, document.getElementById('parking-group-title').innerText);
 }
 
@@ -218,11 +182,10 @@ async function toggleAttendance(dateStr, isAttending) {
 
     if (error) {
         console.error("Error updating attendance:", error);
-        alert("Error al actualizar asistencia");
+        showToast(t('parking.error_asistencia'), 'error');
         return;
     }
 
-    // Refresh state
     await fetchAttendanceRange();
 }
 
@@ -230,10 +193,9 @@ async function toggleAttendance(dateStr, isAttending) {
 async function addSpot(name) {
     if (!name) return;
 
-    // Get max order
-    const maxOrder = window.parkingState.spots.reduce((max, s) => Math.max(max, s.order_index), 0);
+    const maxOrder = window.parkingState.spots.reduce((max, s) => Math.max(max, s.order_index || 0), 0);
 
-    const { data, error } = await _supabase.schema('parking').from('spots').insert({
+    const { error } = await _supabase.schema('parking').from('spots').insert({
         group_id: window.currentGroupId,
         name: name,
         order_index: maxOrder + 1
@@ -241,36 +203,58 @@ async function addSpot(name) {
 
     if (error) {
         console.error("Error adding spot:", error);
-        alert("Error: " + error.message);
+        showToast(t('shared.error_generico') + ": " + error.message, 'error');
         return;
     }
 
-    // Refresh local state
     await loadParkingGroupDetail(window.currentGroupId, document.getElementById('parking-group-title').innerText);
 }
 
+async function moveSpot(spotId, direction) {
+    const spots = [...(window.parkingState.spots || [])];
+    const idx = spots.findIndex(s => s.id === spotId);
+    const targetIdx = idx + direction;
+    if (idx < 0 || targetIdx < 0 || targetIdx >= spots.length) return;
+
+    const current = spots[idx];
+    const target = spots[targetIdx];
+    const currentOrder = current.order_index ?? (idx + 1);
+    const targetOrder = target.order_index ?? (targetIdx + 1);
+
+    try {
+        const [{ error: e1 }, { error: e2 }] = await Promise.all([
+            _supabase.schema('parking').from('spots').update({ order_index: targetOrder }).eq('id', current.id),
+            _supabase.schema('parking').from('spots').update({ order_index: currentOrder }).eq('id', target.id)
+        ]);
+        if (e1 || e2) throw e1 || e2;
+
+        showToast(t('parking.reorder_success'), 'success');
+        await loadParkingGroupDetail(window.currentGroupId, document.getElementById('parking-group-title').innerText);
+    } catch (err) {
+        console.error("Error reordering spots:", err);
+        showToast(t('shared.error_generico'), 'error');
+    }
+}
+
 async function deleteSpot(spotId) {
-    if (!confirm("¿Eliminar plaza? Esto afectará a la rotación futura.")) return;
+    if (!await showConfirm(t('parking.confirm_delete_spot'))) return;
 
     const { error } = await _supabase.schema('parking').from('spots').delete().eq('id', spotId);
 
     if (error) {
-        alert("Error: " + error.message);
+        showToast(t('shared.error_generico') + ": " + error.message, 'error');
         return;
     }
 
-    // Refresh local state
     await loadParkingGroupDetail(window.currentGroupId, document.getElementById('parking-group-title').innerText);
 }
 
 // 5. Custom Mold Management
-// localStorage key helper
 function _moldKey(groupId) { return `parking_custom_mold_${groupId}`; }
 
 async function saveCustomMold(moldArray) {
     if (!window.currentGroupId) return;
 
-    // 1. Try to persist in Supabase
     const { error: updateError } = await _supabase
         .from('groups')
         .update({ custom_mold: moldArray })
@@ -278,26 +262,11 @@ async function saveCustomMold(moldArray) {
 
     if (updateError) {
         console.error('[Parking] Error updating custom_mold in Supabase:', updateError);
-        // Don't throw yet — we'll still save to localStorage below
     }
 
-    // 2. Verify what Supabase actually stored (diagnostic)
-    const { data: verifyData, error: verifyError } = await _supabase
-        .from('groups')
-        .select('custom_mold')
-        .eq('id', window.currentGroupId)
-        .single();
-
-    console.log('[Parking] custom_mold in Supabase after save:', verifyData?.custom_mold, '| error:', verifyError?.message || null);
-
-    // 3. Always save to localStorage as reliable fallback
     localStorage.setItem(_moldKey(window.currentGroupId), JSON.stringify(moldArray));
-    console.log('[Parking] custom_mold saved to localStorage for group', window.currentGroupId);
-
-    // 4. Update local state
     window.parkingState.customMold = moldArray;
 
-    // 5. If Supabase update failed, throw so caller knows
     if (updateError) throw updateError;
 }
 
@@ -311,7 +280,6 @@ async function resetCustomMold() {
 
     if (error) {
         console.error('[Parking] Error resetting custom_mold:', error);
-        // Still clear localStorage even if Supabase fails
     }
 
     localStorage.removeItem(_moldKey(window.currentGroupId));
@@ -333,35 +301,49 @@ function closeSpotTypeSelectionModal() {
     pendingGroupId = null;
 }
 
-function selectSpotType(type) {
+async function selectSpotType(type) {
     if (type === 'shared') {
         if (pendingGroupId) {
-            joinParkingGroup(pendingGroupId, 'shared');
-            closeSpotTypeSelectionModal();
+            const gId = pendingGroupId;
+            try {
+                await joinParkingGroup(gId, 'shared');
+                closeSpotTypeSelectionModal();
+                showToast(t('shared.toast_group_joined'), 'success');
+                if (typeof loadAllGroups === 'function') loadAllGroups();
+            } catch (err) {
+                showToast(t('shared.join_group_error'), 'error');
+            }
         }
     } else if (type === 'fixed') {
         document.getElementById('fixed-spot-name-container').classList.remove('hidden');
     }
 }
 
-function confirmFixedSpot() {
+async function confirmFixedSpot() {
     const spotName = document.getElementById('fixed-spot-name-input').value.trim();
     if (!spotName) {
-        alert('Por favor, introduce un nombre para tu plaza fija');
+        showToast(t('parking.plaza_fija_error'), 'warning');
         return;
     }
-    
+
     if (pendingGroupId) {
-        joinParkingGroup(pendingGroupId, 'fixed', spotName);
-        closeSpotTypeSelectionModal();
+        const gId = pendingGroupId;
+        try {
+            await joinParkingGroup(gId, 'fixed', spotName);
+            closeSpotTypeSelectionModal();
+            showToast(t('shared.toast_group_joined'), 'success');
+            if (typeof loadAllGroups === 'function') loadAllGroups();
+        } catch (err) {
+            showToast(t('shared.join_group_error'), 'error');
+        }
     }
 }
 
-// Expose
 Object.assign(window, {
     joinParkingGroup,
     loadParkingGroupDetail,
     addSpot,
+    moveSpot,
     deleteSpot,
     updateRoutine,
     toggleAttendance,
@@ -374,4 +356,3 @@ Object.assign(window, {
     selectSpotType,
     confirmFixedSpot
 });
-
