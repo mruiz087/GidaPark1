@@ -16,6 +16,9 @@ function hideGroupDetail() {
     });
 
     selectedDate = null;
+    if (typeof loadAllGroups === 'function') {
+        loadAllGroups();
+    }
 }
 
 function showGroupMembers() {
